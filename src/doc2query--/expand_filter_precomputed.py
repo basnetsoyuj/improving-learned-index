@@ -1,11 +1,14 @@
+import re
+import subprocess
 from itertools import compress
 from pathlib import Path
+from typing import Union
+
 import pyterrier as pt
 from pyterrier_doc2query import Doc2QueryStore, QueryScoreStore
-import re
-from src.utils import set_logger
-import subprocess
 from tqdm import tqdm
+
+from ..utils.logger import Logger
 
 if not pt.started():
     pt.init()
@@ -22,15 +25,15 @@ def get_term_set(text):
 
 
 def construct_collection(
-        msmarco_passages_path,
-        queries_repo,
-        scores_repo,
-        output_path,
-        threshold,
-        unique_terms_only=True
+        msmarco_passages_path: Union[str, Path],
+        queries_repo: str,
+        scores_repo: str,
+        output_path: Union[str, Path],
+        threshold: float,
+        unique_terms_only: bool = True
 ):
-    filename = Path(__file__).name
-    logger = set_logger(filename, Path(output_path).parent / "logs" / f'{filename}.log', stream=False)
+    filename = Path(__file__).stem
+    logger = Logger(filename, filename, stream=False)
 
     # for downloading Git-LFS files and not the pointers
     subprocess.run(["git", "lfs", "install", "--skip-repo"])

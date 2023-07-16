@@ -1,154 +1,111 @@
 import os
-from itertools import accumulate
+from pathlib import Path
+from typing import Union
 
-import numpy as np
 import torch
-import torch.cuda.amp as amp
 import torch.distributed
-import torch.nn as nn
-import torch.optim as optim
-from tokenizers import Tokenizer
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
-from transformers import set_seed
 
-from . import ModelCheckpoint, MSMarcoReader
-from ..models import DeepImpact
-
-tokenizer = Tokenizer.from_pretrained('bert-base-uncased')
-basic_tokenizer = tokenizer.pre_tokenizer
-normalizer = tokenizer.normalizer
+from ...utils.checkpoint import ModelCheckpoint
 
 
-def load_checkpoint(model, optimizer, checkpoint):
-    checkpoint = torch.load(checkpoint, map_location='cpu')
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+class Trainer:
+    def __init__(
+            self,
+            model: torch.nn.Module,
+            optimizer: torch.optim.Optimizer,
+            train_data: DataLoader,
+            checkpoint_dir: Union[str, Path],
+            batch_size: int,
+            save_every: int,
+            save_best: bool = True,
+            seed: int = 42,
+            gradient_accumulation_steps: int = 1,
+    ) -> None:
+        self.seed = seed
+        self.gpu_id = torch.distributed.get_rank()
+        self.model = model.to(self.gpu_id)
+        self.optimizer = optimizer
+        self.train_data = train_data
+        self.batch_size = batch_size
+        self.gradient_accumulation_steps = gradient_accumulation_steps
 
+        model_name = self.model.__class__.__name__
+        last_checkpoint_path = checkpoint_dir / f'{model_name}_latest.pt'
+        if os.path.exists(last_checkpoint_path):
+            self.checkpoint_callback = ModelCheckpoint.load(
+                model=self.model,
+                optimizer=self.optimizer,
+                last_checkpoint_path=last_checkpoint_path,
+                save_every=save_every,
+                save_best=save_best,
+            )
+        else:
+            self.checkpoint_callback = ModelCheckpoint(
+                model=self.model,
+                optimizer=self.optimizer,
+                checkpoint_dir=checkpoint_dir,
+                save_every=save_every,
+                save_best=save_best,
+            )
 
-def collate(q, d, max_length):
-    q = normalizer.normalize_str(q)
-    results = list(set(basic_tokenizer.pre_tokenize_str(q.lower())))
-    if len(results) > 0:
-        query_tokens, _ = zip(*results)
-    else:
-        query_tokens = []
+        self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
 
-    d = normalizer.normalize_str(d)
-    results = basic_tokenizer.pre_tokenize_str(d.lower())
-    if len(results) > 0:
-        doc_tokens, _ = zip(*results)
-    else:
-        doc_tokens = []
-    doc_tokens = doc_tokens[:max_length]
+    def train(self):
+        n_ranks = torch.distributed.get_world_size()
+        assert self.batch_size % n_ranks == 0, "Batch size must be divisible by the number of GPUs"
 
-    encoded = tokenizer.encode(" ".join(doc_tokens))
-    tokenized = encoded.tokens[1:]  # ignore CLS token
+        torch.manual_seed(self.seed)
+        torch.cuda.manual_seed(self.seed)
 
-    word_indexes = list(
-        accumulate([-1] + tokenized, lambda a, b: a + int(not b.startswith("##")))
-    )
-    match_indexes = list(set([doc_tokens.index(t) for t in query_tokens if t in doc_tokens]))
-    term_indexes = [word_indexes.index(idx) for idx in match_indexes if
-                    idx in word_indexes and word_indexes.index(idx) < max_length]
-    mask = np.zeros(max_length, dtype=bool)
-    mask[term_indexes] = True
-    return encoded, torch.from_numpy(mask)
+        self.model.train()
 
+        criterion = torch.nn.CrossEntropyLoss()
+        scaler = torch.cuda.amp.GradScaler()
 
-def train(args):
-    set_seed(12345)
-    torch.cuda.set_device(args.rank)
-    device = torch.device("cuda:{}".format(args.rank))
-    torch.distributed.init_process_group(backend="nccl")
-
-    tokenizer.enable_truncation(args.max_length)
-    tokenizer.enable_padding(length=args.max_length)
-
-    def collate_fn(examples):
-        E = []
-        M = []
-        L = []
-        for i in range(0, len(examples)):
-            query = examples[i][0]
-            document = examples[i][1]
-            encoded, mask = collate(query, document, args.max_length)
-            E.append(encoded)
-            M.append(mask)
-            L.append(1)
-
-            document = examples[i][2]
-            encoded, mask = collate(query, document, args.max_length)
-            E.append(encoded)
-            M.append(mask)
-            L.append(0)
-        return [E, M, L]
-
-    nranks = 'WORLD_SIZE' in os.environ and int(os.environ['WORLD_SIZE'])
-    nranks = max(1, nranks)
-    assert args.batch_size % nranks == 0, (args.batch_size, nranks)
-    args.batch_size = args.batch_size // nranks
-
-    dataset = MSMarcoReader(args)
-    train_sampler = DistributedSampler(dataset=dataset)
-
-    train_dataloader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        collate_fn=collate_fn,
-        num_workers=32,
-        sampler=train_sampler,
-        shuffle=False,
-        drop_last=True,
-    )
-
-    scaler = amp.GradScaler()
-    model = DeepImpact.from_pretrained("bert-base-uncased")
-    model.device(device)
-    model = model.to(device)
-
-    optimizer = optim.AdamW(params=model.parameters(), lr=args.lr)
-
-    if args.checkpoint:
-        load_checkpoint(model, optimizer, args.checkpoint)
-
-    model.train()
-    criterion = nn.CrossEntropyLoss()
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.rank],
-                                                      output_device=args.rank,
-                                                      find_unused_parameters=True)
-
-    checkpoint_callback = ModelCheckpoint(
-        model, optimizer, "./checkpoints/", "deepimpact", 2000)
-
-    while True:
-        with tqdm(total=len(train_dataloader)) as pbar:
+        with tqdm(total=len(self.train_data)) as progress_bar:
             train_loss = 0
-            for step, batch in enumerate(train_dataloader):
+
+            for i, batch in enumerate(self.train_data):
                 with torch.cuda.amp.autocast():
-                    E, M, L = batch
-                    labels = torch.tensor(L, dtype=torch.float, device=device)
-                    labels = labels.view(args.batch_size, -1)
-                    doc_scores = model(E, M)
-                    mask = torch.stack(M, dim=0).to(device).unsqueeze(-1)
-                    outputs = (mask * doc_scores).sum(dim=1)
-                    outputs = outputs.squeeze()
-                    outputs = outputs.view(args.batch_size, -1)
+                    encoded_list, masks, labels = batch
+                    input_ids = torch.tensor([x.ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
+                    attention_mask = torch.tensor([x.attention_mask for x in encoded_list], dtype=torch.long).to(
+                        self.gpu_id)
+                    type_ids = torch.tensor([x.type_ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
+                    masks = masks.to(self.gpu_id)
+                    labels = labels.view(self.batch_size, -1).to(self.gpu_id)
+
+                    document_term_scores = self.model(input_ids, attention_mask, type_ids)
+                    outputs = (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
 
                     loss = criterion(outputs, labels)
+                    loss /= self.gradient_accumulation_steps
 
-                    loss = loss / args.gradient_accumulation_steps
                 scaler.scale(loss).backward()
                 train_loss += loss.item()
-                if step % args.gradient_accumulation_steps == 0:
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
-                    scaler.step(optimizer)
+
+                if i % self.gradient_accumulation_steps == 0:
+                    scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 2.0)
+                    scaler.step(self.optimizer)
                     scaler.update()
-                    optimizer.zero_grad()
-                if args.rank == 0:
-                    pbar.update(1)
-                    pbar.set_description("Avg train loss={:.2f}, Examples seen={}".format(
-                        train_loss / (step + 1) * 100, step * args.batch_size * nranks))
-                    checkpoint_callback()
+                    self.optimizer.zero_grad()
+
+                if self.gpu_id == 0:
+                    progress_bar.update(1)
+                    progress_bar.set_description(
+                        f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
+                        f"Examples Seen: {i * self.batch_size * n_ranks}")
+                    self.checkpoint_callback()
+
+    @staticmethod
+    def ddp_setup():
+        torch.distributed.init_process_group(backend="nccl")
+        torch.cuda.set_device(torch.distributed.get_rank())
+
+    @staticmethod
+    def ddp_cleanup():
+        torch.distributed.destroy_process_group()

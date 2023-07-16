@@ -1,8 +1,10 @@
 import logging
 from pathlib import Path
 
+DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
-def set_logger(name: str, path: Path, stream: bool = True):
+
+def Logger(name: str, filename: str, stream: bool = True, log_dir: Path = DEFAULT_LOG_DIR) -> logging.Logger:
     """
     Define a logger to log output to a file and optionally to the console
     """
@@ -10,8 +12,8 @@ def set_logger(name: str, path: Path, stream: bool = True):
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fh = logging.FileHandler(path)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(log_dir / f'{filename}.log')
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
