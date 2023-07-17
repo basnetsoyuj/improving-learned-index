@@ -8,7 +8,7 @@ import pyterrier as pt
 from pyterrier_doc2query import Doc2QueryStore, QueryScoreStore
 from tqdm import tqdm
 
-from ..utils.logger import Logger
+from src.utils.logger import Logger
 
 if not pt.started():
     pt.init()

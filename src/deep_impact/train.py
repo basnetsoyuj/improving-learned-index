@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from src.utils.datasets import MSMarcoTriples
-from .models.original import DeepImpact as Model
-from .training import Trainer
+from src.deep_impact.models import DeepImpact as Model
+from src.deep_impact.training import Trainer
 
 
 def collate_fn(batch, max_length=None):
@@ -50,7 +50,7 @@ def run(
         collate_fn=partial(collate_fn, max_length=max_length),
         sampler=DistributedSampler(dataset),
         drop_last=True,
-        num_workers=32,
+        num_workers=24,
     )
 
     model = Model.from_pretrained("bert-base-uncased")
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")
     parser.add_argument("--max_length", type=int, default=300, help="Max Number of tokens in document")
     parser.add_argument("--seed", type=int, default=42, help="Fix seed")
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument("--lr", type=float, default=3e-6, help="Learning rate")
     parser.add_argument("--save_every", type=int, default=20000, help="Save checkpoint every n steps")
     parser.add_argument("--save_best", action="store_true", help="Save the best model")

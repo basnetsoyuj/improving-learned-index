@@ -4,7 +4,7 @@ from typing import Union
 from torch.utils.data import Dataset
 
 
-class MSMarcoTriples():
+class MSMarcoTriples(Dataset):
     def __init__(self, triples_path: Union[str, Path], queries_path: Union[str, Path],
                  collection_path: Union[str, Path]):
         """

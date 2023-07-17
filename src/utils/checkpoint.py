@@ -5,7 +5,7 @@ import torch
 
 
 class ModelCheckpoint:
-    EXTENSION = '.pt'
+    EXTENSION = 'pt'
 
     def __init__(
             self,
@@ -113,7 +113,7 @@ class ModelCheckpoint:
             save_latest_snapshot=save_latest_snapshot,
             save_best=save_best
         )
-
+        obj.step = checkpoint['step']
         if save_best and 'metric' in checkpoint:
             obj.best_metric = checkpoint['metric']
             obj._save(suffix='best', metric=obj.best_metric)
