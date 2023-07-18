@@ -3,6 +3,10 @@ from typing import Callable, Dict, Optional, Union, Self
 
 import torch
 
+from src.utils.logger import Logger
+
+logger = Logger(Path(__file__).stem, stream=False)
+
 
 class ModelCheckpoint:
     EXTENSION = 'pt'
@@ -69,7 +73,10 @@ class ModelCheckpoint:
         if metric:
             checkpoint['metric'] = metric
 
-        torch.save(checkpoint, self.checkpoint_dir / f'{self.filename}_{suffix}.{self.EXTENSION}')
+        filename = f'{self.filename}_{suffix}.{self.EXTENSION}'
+        torch.save(checkpoint, self.checkpoint_dir / filename)
+
+        logger.info(f'Saved checkpoint to {filename}')
 
     @classmethod
     def load(
@@ -103,6 +110,8 @@ class ModelCheckpoint:
         checkpoint = torch.load(last_checkpoint_path, map_location=map_location)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        logger.info(f'Loaded checkpoint for {model.__class__.__name__} from {last_checkpoint_path}')
 
         obj = cls(
             model=model,
