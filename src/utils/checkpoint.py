@@ -10,6 +10,7 @@ logger = Logger(Path(__file__).stem, stream=False)
 
 class ModelCheckpoint:
     EXTENSION = 'pt'
+    LATEST_SNAPSHOT_SUFFIX = 'latest'
 
     def __init__(
             self,
@@ -54,7 +55,7 @@ class ModelCheckpoint:
         if self.step % self.save_every == 0:
             self._save(suffix=str(self.step), metric=metric)
             if self.save_latest_snapshot:
-                self._save(suffix='latest', metric=metric)
+                self._save(suffix=self.LATEST_SNAPSHOT_SUFFIX, metric=metric)
 
         if self.save_best:
             assert metric is not None, "Metric must be provided for save_best=True"
@@ -107,6 +108,7 @@ class ModelCheckpoint:
         :param map_location: Map location for loading the checkpoint
         :return: Model checkpoint object
         """
+        last_checkpoint_path = Path(last_checkpoint_path)
         checkpoint = torch.load(last_checkpoint_path, map_location=map_location)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

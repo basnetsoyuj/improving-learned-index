@@ -9,9 +9,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.utils.checkpoint import ModelCheckpoint
+from src.utils.logger import Logger
 
 
 class Trainer:
+    logger = Logger(Path(__file__).stem, stream=True)
+
     def __init__(
             self,
             model: torch.nn.Module,
@@ -26,6 +29,7 @@ class Trainer:
     ) -> None:
         self.seed = seed
         self.gpu_id = torch.distributed.get_rank()
+        self.n_ranks = torch.distributed.get_world_size()
         self.model = model.to(self.gpu_id)
         self.optimizer = optimizer
         self.train_data = train_data
@@ -33,7 +37,8 @@ class Trainer:
         self.gradient_accumulation_steps = gradient_accumulation_steps
 
         model_name = self.model.__class__.__name__
-        last_checkpoint_path = checkpoint_dir / f'{model_name}_latest.pt'
+        last_checkpoint_path = (checkpoint_dir /
+                                f'{model_name}_{ModelCheckpoint.LATEST_SNAPSHOT_SUFFIX}.{ModelCheckpoint.EXTENSION}')
         if os.path.exists(last_checkpoint_path):
             self.checkpoint_callback = ModelCheckpoint.load(
                 model=self.model,
@@ -54,8 +59,7 @@ class Trainer:
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
 
     def train(self):
-        n_ranks = torch.distributed.get_world_size()
-        assert self.batch_size % n_ranks == 0, "Batch size must be divisible by the number of GPUs"
+        assert self.batch_size % self.n_ranks == 0, "Batch size must be divisible by the number of GPUs"
 
         torch.manual_seed(self.seed)
         torch.cuda.manual_seed(self.seed)
@@ -65,7 +69,13 @@ class Trainer:
         criterion = torch.nn.CrossEntropyLoss()
         scaler = torch.cuda.amp.GradScaler()
 
-        with tqdm(total=len(self.train_data)) as progress_bar:
+        # Resume training if checkpoint exists i.e. step > 0
+        remaining = len(self.train_data) - self.checkpoint_callback.step
+        self.train_data = iter(self.train_data)
+        if self.checkpoint_callback.step:
+            self.skip()
+
+        with tqdm(total=remaining) as progress_bar:
             train_loss = 0
 
             for i, batch in enumerate(self.train_data):
@@ -98,8 +108,20 @@ class Trainer:
                     progress_bar.update(1)
                     progress_bar.set_description(
                         f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
-                        f"Examples Seen: {i * self.batch_size * n_ranks}")
+                        f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
+
+    def skip(self):
+        if self.gpu_id == 0:
+            self.logger.info(f"Resuming training from step {self.checkpoint_callback.step}. "
+                             f"Skipping {self.checkpoint_callback.step * self.batch_size * self.n_ranks} seen examples.")
+
+        with tqdm(total=self.checkpoint_callback.step) as progress_bar:
+            for i, _ in enumerate(self.train_data, start=1):
+                if i == self.checkpoint_callback.step:
+                    break
+                if self.gpu_id == 0:
+                    progress_bar.update(1)
 
     @staticmethod
     def ddp_setup():
