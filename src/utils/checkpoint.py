@@ -83,9 +83,9 @@ class ModelCheckpoint:
     def load(
             cls,
             model: torch.nn.Module,
-            optimizer: torch.optim.Optimizer,
             last_checkpoint_path: Union[str, Path],
-            save_every: int,
+            optimizer: Optional[torch.optim.Optimizer] = None,
+            save_every: int = 1,
             filename: Optional[str] = None,
             save_latest_snapshot: bool = True,
             save_best: bool = False,
@@ -94,7 +94,7 @@ class ModelCheckpoint:
                 torch.device,
                 str,
                 Dict[str, str]
-            ]] = 'cuda:0',
+            ]] = None,
     ) -> Self:
         """
         Load the model checkpoint
@@ -111,7 +111,9 @@ class ModelCheckpoint:
         last_checkpoint_path = Path(last_checkpoint_path)
         checkpoint = torch.load(last_checkpoint_path, map_location=map_location)
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        if optimizer is not None:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
         logger.info(f'Loaded checkpoint for {model.__class__.__name__} from {last_checkpoint_path}')
 
@@ -124,7 +126,7 @@ class ModelCheckpoint:
             save_latest_snapshot=save_latest_snapshot,
             save_best=save_best
         )
-        obj.step = checkpoint['step']
+        obj.step = checkpoint.get('step', 0)
         if save_best and 'metric' in checkpoint:
             obj.best_metric = checkpoint['metric']
             obj._save(suffix='best', metric=obj.best_metric)

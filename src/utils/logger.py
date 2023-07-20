@@ -2,11 +2,11 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
+from src.utils.defaults import LOG_DIR
 
 
 def Logger(name: str, filename: Optional[str] = None, stream: bool = True,
-           log_dir: Path = DEFAULT_LOG_DIR) -> logging.Logger:
+           log_dir: Path = LOG_DIR) -> logging.Logger:
     """
     Define a logger to log output to a file and optionally to the console
     """

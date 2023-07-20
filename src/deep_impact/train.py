@@ -53,7 +53,7 @@ def run(
         num_workers=24,
     )
 
-    model = Model.from_pretrained("bert-base-uncased")
+    model = Model.load()
     Model.tokenizer.enable_truncation(max_length=max_length)
     Model.tokenizer.enable_padding(length=max_length)
 
