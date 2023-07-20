@@ -1,3 +1,4 @@
+import string
 from pathlib import Path
 from typing import Optional, Union, List, Dict, Tuple
 
@@ -13,6 +14,7 @@ from src.utils.checkpoint import ModelCheckpoint
 class DeepImpact(BertPreTrainedModel):
     max_length = 512
     tokenizer = tokenizers.Tokenizer.from_pretrained('bert-base-uncased')
+    punctuation = set(string.punctuation)
 
     def __init__(self, config):
         super(DeepImpact, self).__init__(config)
@@ -48,46 +50,20 @@ class DeepImpact(BertPreTrainedModel):
         query = DeepImpact.tokenizer.normalizer.normalize_str(query)
         query_terms = {x[0] for x in DeepImpact.tokenizer.pre_tokenizer.pre_tokenize_str(query)}
 
-        encoded, document_terms, term_index_to_token_index = DeepImpact._encode_document_and_map_term_to_tokens(
-            document)
-
-        token_indices_of_matching_terms = []
-        seen = set()
-        for i, term in enumerate(document_terms):
-            if (term in query_terms) and (term not in seen) and (i in term_index_to_token_index):
-                token_indices_of_matching_terms.append(term_index_to_token_index[i])
-                seen.add(term)
+        encoded, term_to_token_index = DeepImpact.process_document(document)
 
         mask = np.zeros(max_length, dtype=bool)
+        token_indices_of_matching_terms = [v for k, v in term_to_token_index.items() if k in query_terms]
         mask[token_indices_of_matching_terms] = True
 
         return encoded, torch.from_numpy(mask)
 
     @staticmethod
-    def process_document(document: str) -> Tuple[tokenizers.Encoding, List[Tuple[str, int]]]:
+    def process_document(document: str) -> Tuple[tokenizers.Encoding, Dict[str, int]]:
         """
-        Encodes the document and maps each term to its corresponding first token index.
+        Encodes the document and maps each unique term (non-punctuation) to its corresponding first token's index.
         :param document: Document string
-        :return: Tuple: Encoded document, List of tuples of document terms and their first token index
-        """
-        encoded, document_terms, map_ = DeepImpact._encode_document_and_map_term_to_tokens(document)
-
-        seen = set()
-        term_to_token_index = []
-
-        # filter out duplicate terms and terms whose tokens overflow the max length
-        for i, term in enumerate(document_terms):
-            if term not in seen and i in map_:
-                seen.add(term)
-                term_to_token_index.append((term, map_[i]))
-        return encoded, term_to_token_index
-
-    @staticmethod
-    def _encode_document_and_map_term_to_tokens(document: str) -> (tokenizers.Encoding, List[str], Dict[int, int]):
-        """
-        Encodes the document and maps each term index to its corresponding first token index.
-        :param document: Document string
-        :return: Tuple: Encoded document, List of document terms, Dict mapping term index to first token index
+        :return: Tuple: Encoded document, Dict mapping unique non-punctuation document terms to first token index
         """
 
         document = DeepImpact.tokenizer.normalizer.normalize_str(document)
@@ -104,7 +80,15 @@ class DeepImpact(BertPreTrainedModel):
             term_index_to_token_index[counter] = i
             counter += 1
 
-        return encoded, document_terms, term_index_to_token_index
+        filtered_term_to_token_index = {}
+
+        # filter out duplicate terms, punctuations, and terms whose tokens overflow the max length
+        for i, term in enumerate(document_terms):
+            if term not in filtered_term_to_token_index \
+                    and term not in DeepImpact.punctuation \
+                    and i in term_index_to_token_index:
+                filtered_term_to_token_index[term] = term_index_to_token_index[i]
+        return encoded, filtered_term_to_token_index
 
     @staticmethod
     def load(checkpoint_path: Optional[Union[str, Path]] = None):
@@ -118,14 +102,14 @@ class DeepImpact(BertPreTrainedModel):
     @torch.no_grad()
     def compute_term_impacts(
             self,
-            documents_terms: List[List[Tuple[str, int]]],
+            documents_term_to_token_index_map: List[Dict[str, int]],
             input_ids: torch.Tensor,
             attention_mask: torch.Tensor,
             token_type_ids: torch.Tensor,
     ) -> List[List[Tuple[str, float]]]:
         """
         Computes the impact scores of each term in each document
-        :param documents_terms: Batch of lists of tuples of document terms and their first token index
+        :param documents_term_to_token_index_map: List of dictionaries mapping each unique term to its first token index
         :param input_ids: Batch of input ids
         :param attention_mask: Batch of attention masks
         :param token_type_ids: Batch of token type ids
@@ -135,7 +119,10 @@ class DeepImpact(BertPreTrainedModel):
         impact_scores = impact_scores.cpu().numpy()
 
         term_impacts = []
-        for i, document_terms in enumerate(documents_terms):
-            term_impacts.append([(term, impact_scores[i][token_index]) for term, token_index in document_terms])
+        for i, term_to_token_index_map in enumerate(documents_term_to_token_index_map):
+            term_impacts.append([
+                (term, impact_scores[i][token_index])
+                for term, token_index in term_to_token_index_map.items()
+            ])
 
         return term_impacts
