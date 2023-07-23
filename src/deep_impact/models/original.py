@@ -1,6 +1,6 @@
 import string
 from pathlib import Path
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Optional, Union, List, Dict, Tuple, Set
 
 import numpy as np
 import tokenizers
@@ -47,8 +47,7 @@ class DeepImpact(BertPreTrainedModel):
         if max_length is None:
             max_length = DeepImpact.max_length
 
-        query = DeepImpact.tokenizer.normalizer.normalize_str(query)
-        query_terms = {x[0] for x in DeepImpact.tokenizer.pre_tokenizer.pre_tokenize_str(query)}
+        query_terms = DeepImpact.process_query(query)
 
         encoded, term_to_token_index = DeepImpact.process_document(document)
 
@@ -57,6 +56,12 @@ class DeepImpact(BertPreTrainedModel):
         mask[token_indices_of_matching_terms] = True
 
         return encoded, torch.from_numpy(mask)
+
+    @staticmethod
+    def process_query(query: str) -> Set[str]:
+        query = DeepImpact.tokenizer.normalizer.normalize_str(query)
+        return set(filter(lambda x: x not in DeepImpact.punctuation,
+                          map(lambda x: x[0], DeepImpact.tokenizer.pre_tokenizer.pre_tokenize_str(query))))
 
     @staticmethod
     def process_document(document: str) -> Tuple[tokenizers.Encoding, Dict[str, int]]:

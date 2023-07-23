@@ -3,6 +3,10 @@ from typing import Union
 
 from torch.utils.data import Dataset
 
+from src.utils.logger import Logger
+
+logger = Logger(__name__)
+
 
 class MSMarcoTriples(Dataset):
     def __init__(self, triples_path: Union[str, Path], queries_path: Union[str, Path],
@@ -57,3 +61,84 @@ class MSMarcoTriples(Dataset):
         qid, pos_id, neg_id = self.triples[idx]
         query, positive_doc, negative_doc = self.queries[qid], self.collection[pos_id], self.collection[neg_id]
         return query, positive_doc, negative_doc
+
+
+class QueryRelevanceDataset:
+    def __init__(self, qrels_path: Union[str, Path]):
+        """
+        Initialize the Qrels Dataset object
+        :param qrels_path: Path to the qrels file. Each line: (qid, 0, pid, 1)
+        """
+        self.qrels = self._load_qrels(qrels_path)
+
+    @staticmethod
+    def _load_qrels(path):
+        qrels = {}
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                qid, x, pid, y = map(int, line.strip().split('\t'))
+                assert x == 0 and y == 1, "Qrels file is not in the expected format"
+                qrels.setdefault(qid, []).append(pid)
+
+        assert all(len(qrels[qid]) == len(set(qrels[qid])) for qid in qrels), "Qrels file contains duplicates"
+        average_positive_per_query = round(sum(len(qrels[qid]) for qid in qrels) / len(qrels), 2)
+        logger.info(f"Loaded {len(qrels)} queries with {average_positive_per_query} positive passages/query on average")
+
+        return qrels
+
+    def __len__(self):
+        return len(self.qrels)
+
+    def __getitem__(self, qid):
+        """
+        Get the positive passage ids for a query id.
+        :param qid: The query id.
+        :return: The positive passage ids for the query.
+        """
+        return self.qrels[qid]
+
+    def keys(self):
+        return self.qrels.keys()
+
+
+class TopKDataset:
+    def __init__(self, top_k_path: Union[str, Path]):
+        self.queries, self.passages, self.top_k = self._load_topK(top_k_path)
+
+    def _load_topK(self, path):
+        queries, passages, top_k = {}, {}, {}
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                qid, pid, query, passage = line.strip().split('\t')
+                qid, pid = int(qid), int(pid)
+
+                assert (qid not in queries) or (queries[qid] == query), "TopK file is not in the expected format"
+                queries[qid] = query
+                passages[pid] = passage
+                top_k.setdefault(qid, []).append(pid)
+
+        assert all(len(top_k[qid]) == len(set(top_k[qid])) for qid in top_k), "TopK file contains duplicates"
+        lens = [len(top_k[qid]) for qid in top_k]
+
+        self.min_len = min(lens)
+        self.max_len = max(lens)
+        self.avg_len = round(sum(lens) / len(top_k), 2)
+
+        logger.info(f"Loaded {len(top_k)} queries:")
+        logger.info(f"Top K Passages distribution: min={self.min_len}, max={self.max_len}, avg={self.avg_len}")
+
+        return queries, passages, top_k
+
+    def __len__(self):
+        return len(self.top_k)
+
+    def __getitem__(self, qid):
+        """
+        Get the top k passage ids for a query id.
+        :param qid: The query id.
+        :return: The top k passage ids for the query.
+        """
+        return self.top_k[qid]
+
+    def keys(self):
+        return self.top_k.keys()
