@@ -11,3 +11,5 @@ COLLECTION_PATH = DATA_DIR / 'expanded-collection.tsv'
 CHECKPOINT_DIR = DATA_DIR / 'checkpoints'
 
 BATCH_SIZE = 32
+
+QUANTIZATION_BITS = 8
