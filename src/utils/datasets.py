@@ -4,7 +4,7 @@ from typing import Union, Set
 from torch.utils.data import Dataset
 
 from src.utils.logger import Logger
-
+from typing import Optional
 logger = Logger(__name__)
 
 
@@ -39,17 +39,26 @@ class Collection:
     :param collection_path: Path to the collection dataset. Each line is a passage of (pid, passage)
     """
 
-    def __init__(self, collection_path: Union[str, Path]):
-        self.collection = self._load_collection(collection_path)
+    def __init__(self, collection_path: Union[str, Path], offset: Optional[int] = None, limit: Optional[int] = None):
+        self.collection = self._load_collection(collection_path, offset, limit)
 
     @staticmethod
-    def _load_collection(path):
-        collection = []
+    def _load_collection(path, offset: Optional[int] = None, limit: Optional[int] = None):
+        if offset is None:
+            offset = 0
+        if limit is None:
+            limit = float('inf')
+
+        collection = {}
         with open(path, encoding='utf-8') as f:
             for idx, line in enumerate(f):
+                if idx < offset:
+                    continue
+                if idx >= offset + limit:
+                    break
                 pid, passage, = line.strip().split('\t')
                 assert int(pid) == idx, "Collection is not sorted by id"
-                collection.append(passage)
+                collection[int(pid)] = passage
         return collection
 
     def __len__(self):

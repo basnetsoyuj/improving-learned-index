@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--qrels_path', type=Path, default=DEEP_IMPACT_DIR / 'qrels.train.tsv')
     parser.add_argument('--queries_path', type=Path, default=DEEP_IMPACT_DIR / 'queries.train.tsv')
     parser.add_argument('--collection_path', type=Path, default=DEEP_IMPACT_DIR / 'collection.tsv')
-    parser.add_argument('--output_path', type=Path, default=DEEP_IMPACT_DIR / 'query-document-pairs.train.tsv')
+    parser.add_argument('--output_path', type=Path, default=DEEP_IMPACT_DIR / 'document-query-pairs.train.tsv')
     args = parser.parse_args()
 
     process(**vars(args))
