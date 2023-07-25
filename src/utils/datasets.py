@@ -1,11 +1,62 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Set
 
 from torch.utils.data import Dataset
 
 from src.utils.logger import Logger
 
 logger = Logger(__name__)
+
+
+class Queries:
+    """
+    Queries dataset.
+    :param queries_path: Path to the queries dataset. Each line is a query of (qid, query)
+    """
+
+    def __init__(self, queries_path: Union[str, Path]):
+        self.queries = self._load_queries(queries_path)
+
+    @staticmethod
+    def _load_queries(path):
+        queries = {}
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                qid, query = line.strip().split('\t')
+                queries[int(qid)] = query
+        return queries
+
+    def __len__(self):
+        return len(self.queries)
+
+    def __getitem__(self, qid):
+        return self.queries[qid]
+
+
+class Collection:
+    """
+    Collection dataset.
+    :param collection_path: Path to the collection dataset. Each line is a passage of (pid, passage)
+    """
+
+    def __init__(self, collection_path: Union[str, Path]):
+        self.collection = self._load_collection(collection_path)
+
+    @staticmethod
+    def _load_collection(path):
+        collection = []
+        with open(path, encoding='utf-8') as f:
+            for idx, line in enumerate(f):
+                pid, passage, = line.strip().split('\t')
+                assert int(pid) == idx, "Collection is not sorted by id"
+                collection.append(passage)
+        return collection
+
+    def __len__(self):
+        return len(self.collection)
+
+    def __getitem__(self, pid):
+        return self.collection[pid]
 
 
 class MSMarcoTriples(Dataset):
@@ -18,8 +69,8 @@ class MSMarcoTriples(Dataset):
         :param collection_path: Path to the collection dataset. Each line is a passage of (pid, passage)
         """
         self.triples = self._load_triples(triples_path)
-        self.queries = self._load_queries(queries_path)
-        self.collection = self._load_collection(collection_path)
+        self.queries = Queries(queries_path)
+        self.collection = Collection(collection_path)
 
     @staticmethod
     def _load_triples(path):
@@ -29,25 +80,6 @@ class MSMarcoTriples(Dataset):
                 qid, pos, neg = map(int, line.strip().split("\t"))
                 triples.append((qid, pos, neg))
         return triples
-
-    @staticmethod
-    def _load_queries(path):
-        queries = {}
-        with open(path, encoding='utf-8') as f:
-            for line in f:
-                qid, query = line.strip().split('\t')
-                queries[int(qid)] = query
-        return queries
-
-    @staticmethod
-    def _load_collection(path):
-        collection = []
-        with open(path, encoding='utf-8') as f:
-            for idx, line in enumerate(f):
-                pid, passage, = line.strip().split('\t')
-                assert int(pid) == idx, "Collection is not sorted by id"
-                collection.append(passage)
-        return collection
 
     def __len__(self):
         return len(self.triples)
@@ -78,9 +110,8 @@ class QueryRelevanceDataset:
             for line in f:
                 qid, x, pid, y = map(int, line.strip().split('\t'))
                 assert x == 0 and y == 1, "Qrels file is not in the expected format"
-                qrels.setdefault(qid, []).append(pid)
+                qrels.setdefault(qid, set()).add(pid)
 
-        assert all(len(qrels[qid]) == len(set(qrels[qid])) for qid in qrels), "Qrels file contains duplicates"
         average_positive_per_query = round(sum(len(qrels[qid]) for qid in qrels) / len(qrels), 2)
         logger.info(f"Loaded {len(qrels)} queries with {average_positive_per_query} positive passages/query on average")
 
@@ -89,11 +120,11 @@ class QueryRelevanceDataset:
     def __len__(self):
         return len(self.qrels)
 
-    def __getitem__(self, qid):
+    def __getitem__(self, qid: int) -> Set:
         """
         Get the positive passage ids for a query id.
         :param qid: The query id.
-        :return: The positive passage ids for the query.
+        :return: Set of positive passage ids for the query.
         """
         return self.qrels[qid]
 

@@ -7,6 +7,8 @@ DEVICE = torch.device('cuda:0')
 LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 DATA_DIR = Path('/hdd1/home/soyuj/')
+DEEP_IMPACT_DIR = DATA_DIR / 'deep-impact'
+
 COLLECTION_PATH = DATA_DIR / 'expanded-collection.tsv'
 CHECKPOINT_DIR = DATA_DIR / 'checkpoints'
 
