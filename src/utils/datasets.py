@@ -67,6 +67,10 @@ class Collection:
     def __getitem__(self, pid):
         return self.collection[pid]
 
+    def __iter__(self):
+        for pid in self.collection:
+            yield pid, self.collection[pid]
+
 
 class MSMarcoTriples(Dataset):
     def __init__(self, triples_path: Union[str, Path], queries_path: Union[str, Path],
