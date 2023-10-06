@@ -104,3 +104,6 @@ trainer = SFTTrainer(
     args=training_arguments,
     packing=packing,
 )
+
+trainer.train()
+trainer.model.save_pretrained(new_model)
