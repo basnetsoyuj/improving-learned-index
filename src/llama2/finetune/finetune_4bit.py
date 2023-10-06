@@ -1,5 +1,5 @@
 import torch
-from datasets import load_dataset, Features, Value
+from datasets import load_dataset
 from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
@@ -9,13 +9,10 @@ from transformers import (
 )
 from trl import SFTTrainer
 
-from src.utils.defaults import DATA_DIR, LLAMA_HUGGINGFACE_CHECKPOINT, DEEP_IMPACT_DIR, DEVICE
+from src.utils.defaults import DATA_DIR, LLAMA_HUGGINGFACE_CHECKPOINT
 
-context_feat = Features({'text': Value(dtype='string', id=None)})
-train_data = load_dataset("json", data_files=str(DEEP_IMPACT_DIR / "train.jsonl"), split="train")
-eval_data = load_dataset("json", data_files=str(DEEP_IMPACT_DIR / "test.jsonl"), split="train")
-
-model_name = str(LLAMA_HUGGINGFACE_CHECKPOINT)
+model_path = str(LLAMA_HUGGINGFACE_CHECKPOINT)
+train_data = load_dataset("json", data_files=str(DATA_DIR / "train.jsonl"), split="train")
 
 new_model = "doc2query-llama-2-7b"
 lora_r = 64
@@ -31,8 +28,7 @@ output_dir = str(DATA_DIR / "finetuned_4bit")
 num_train_epochs = 1
 fp16 = False
 bf16 = False
-per_device_train_batch_size = 4
-per_device_eval_batch_size = 4
+per_device_train_batch_size = 32
 gradient_accumulation_steps = 1
 gradient_checkpointing = True
 max_grad_norm = 0.3
@@ -44,10 +40,11 @@ max_steps = -1
 warmup_ratio = 0.03
 group_by_length = True
 save_steps = 25
+save_total_limit = 10
 logging_steps = 5
 max_seq_length = None
 packing = False
-device_map = DEVICE
+device_map = {"": 0}
 
 compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
 bnb_config = BitsAndBytesConfig(
@@ -57,13 +54,13 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=use_nested_quant,
 )
 model = AutoModelForCausalLM.from_pretrained(
-    model_name,
+    model_path,
     quantization_config=bnb_config,
     device_map=device_map
 )
 model.config.use_cache = False
 model.config.pretraining_tp = 1
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 peft_config = LoraConfig(
@@ -82,6 +79,7 @@ training_arguments = TrainingArguments(
     gradient_accumulation_steps=gradient_accumulation_steps,
     optim=optim,
     save_steps=save_steps,
+    save_total_limit=save_total_limit,
     logging_steps=logging_steps,
     learning_rate=learning_rate,
     weight_decay=weight_decay,
@@ -93,14 +91,12 @@ training_arguments = TrainingArguments(
     group_by_length=group_by_length,
     lr_scheduler_type=lr_scheduler_type,
     report_to="all",
-    evaluation_strategy="steps",
-    eval_steps=5
 )
+
 # Set supervised fine-tuning parameters
 trainer = SFTTrainer(
     model=model,
     train_dataset=train_data,
-    eval_dataset=eval_data,
     peft_config=peft_config,
     dataset_text_field="text",
     max_seq_length=max_seq_length,
@@ -108,6 +104,3 @@ trainer = SFTTrainer(
     args=training_arguments,
     packing=packing,
 )
-
-trainer.train()
-trainer.model.save_pretrained(new_model)
