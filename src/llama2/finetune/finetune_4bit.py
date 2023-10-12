@@ -8,13 +8,17 @@ from transformers import (
     TrainingArguments,
 )
 from trl import SFTTrainer
+from pathlib import Path
 
-from src.utils.defaults import DATA_DIR, LLAMA_HUGGINGFACE_CHECKPOINT
+# for NYU HPC
+DATA_DIR = Path("/scratch/sjb8193")
+LLAMA_HUGGINGFACE_CHECKPOINT = Path("/scratch/sjb8193/models_hf/7B")
 
 model_path = str(LLAMA_HUGGINGFACE_CHECKPOINT)
+new_model = str(DATA_DIR / "doc2query-llama-2-7b")
+
 train_data = load_dataset("json", data_files=str(DATA_DIR / "train.jsonl"), split="train")
 
-new_model = "doc2query-llama-2-7b"
 lora_r = 64
 lora_alpha = 16
 lora_dropout = 0.1
