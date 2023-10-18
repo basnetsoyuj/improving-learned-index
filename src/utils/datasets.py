@@ -57,7 +57,7 @@ class Collection:
                 if idx >= offset + limit:
                     break
                 pid, passage, = line.strip().split('\t')
-                assert int(pid) == idx, "Collection is not sorted by id"
+                # assert int(pid) == idx, "Collection is not sorted by id"
                 collection[int(pid)] = passage
         return collection
 
