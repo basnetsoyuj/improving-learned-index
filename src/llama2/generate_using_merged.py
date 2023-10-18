@@ -71,7 +71,7 @@ if __name__ == "__main__":
         batch.append(document)
         doc_ids.append(doc_id)
         if len(batch) == args.batch_size:
-            queries_list = generator.generate(batch, num_return_sequences=80, max_new_tokens=100, do_sample=True,
+            queries_list = generator.generate(batch, num_return_sequences=80, max_new_tokens=50, do_sample=True,
                                               top_k=50, top_p=0.95)
 
             with open(args.output_path, 'a', encoding='utf-8') as f:

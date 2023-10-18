@@ -58,28 +58,32 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Generate queries from a trained model.')
-    parser.add_argument('--peft_path', type=Path, default=LLAMA_DIR / '7B_finetuned')
     parser.add_argument('--llama_path', type=Path, default=LLAMA_HUGGINGFACE_CHECKPOINT)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--peft_path', type=Path, default=LLAMA_DIR / '7B_finetuned')
+    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--collection_path', type=Path, default=DATA_DIR / 'collection.tsv')
+    parser.add_argument('--output_path', type=Path, default=DATA_DIR / 'queries.tsv')
 
     args = parser.parse_args()
 
     generator = QueryGenerator(peft_path=args.peft_path, llama_path=args.llama_path)
-
-    collection = Collection(collection_path=DATA_DIR / 'collection.tsv')
+    collection = Collection(collection_path=args.collection_path)
 
     batch = []
-    counter = 0
+    doc_ids = []
 
-    for _, document in tqdm(collection):
+    for doc_id, document in tqdm(collection):
         batch.append(document)
+        doc_ids.append(doc_id)
         if len(batch) == args.batch_size:
-            queries_list = generator.generate(batch, num_return_sequences=80, max_new_tokens=100, do_sample=True,
+            queries_list = generator.generate(batch, num_return_sequences=80, max_new_tokens=60, do_sample=True,
                                               top_k=50, top_p=0.95)
-            batch = []
 
-            with open(DATA_DIR / 'queries.tsv', 'a', encoding='utf-8') as f:
+            with open(args.output_path, 'a', encoding='utf-8') as f:
                 for i, queries in enumerate(queries_list):
-                    json.dump({'doc_id': i + counter, 'queries': queries}, f)
+                    json.dump({'doc_id': doc_ids[i], 'queries': queries}, f)
                     f.write('\n')
-            counter += len(queries_list)
+
+            batch = []
+            doc_ids = []
+
