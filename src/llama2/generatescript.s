@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=rtx8000
 #SBATCH --mem=64GB
-#SBATCH --time=30:00:00
+#SBATCH --time=168:00:00
 #SBATCH --job-name=llama2_inference
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=soyuj@nyu.edu
@@ -15,6 +15,7 @@ module load cuda/11.6.2
 module load cudnn/8.6.0.163-cuda11
 cd $HOME/improving-learned-index
 python -m src.llama2.generate_using_merged \
-  --collection_path /scratch/sjb8193/positive_collection.tsv \
-  --output_path /hdd1/home/soyuj/positive_queries.tsv \
+  --llama_path /scratch/sjb8193/doc2query-llama-2-7b-merged \
+  --collection_path /scratch/sjb8193/split_0.tsv \
+  --output_path /scratch/sjb8193/split_0_queries.tsv \
   --batch_size 1

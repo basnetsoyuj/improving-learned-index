@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 from typing import Union, List
-
+import os
 import torch
 from tqdm import tqdm
 from transformers import LlamaForCausalLM, LlamaTokenizer
@@ -67,7 +67,22 @@ if __name__ == "__main__":
     batch = []
     doc_ids = []
 
+    latest_doc_id = 0
+    skip = False
+    if os.path.exists(args.output_path):
+        with open(args.output_path, 'r', encoding='utf-8') as f:
+            line = f.readlines()[-1]
+        latest_doc_id = json.loads(line)['doc_id']
+        skip = True
+
     for doc_id, document in tqdm(collection):
+        if skip:
+            if doc_id != latest_doc_id:
+                continue
+            else:
+                skip = False
+                continue
+
         batch.append(document)
         doc_ids.append(doc_id)
         if len(batch) == args.batch_size:
