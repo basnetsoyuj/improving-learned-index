@@ -1,8 +1,9 @@
 import json
+import os
 import re
 from pathlib import Path
 from typing import Union, List
-import os
+
 import torch
 from tqdm import tqdm
 from transformers import LlamaForCausalLM, LlamaTokenizer
@@ -16,7 +17,8 @@ from src.utils.defaults import DEVICE, DATA_DIR
 # DEVICE = xm.xla_device()
 
 class QueryGenerator:
-    def __init__(self, llama_path: Union[str, Path]):
+    def __init__(self, llama_path: Union[str, Path], max_tokens):
+        self.max_tokens = max_tokens
         self.llama_path = Path(llama_path)
         self.tokenizer = LlamaTokenizer.from_pretrained(self.llama_path)
         self.tokenizer.pad_token = 0  # making it different from the eos token
@@ -42,9 +44,17 @@ class QueryGenerator:
         return [predicted_queries[i: i + N] for i in range(0, len(predicted_queries), N)]
 
     def prompt_and_tokenize(self, documents: List[str]):
-        prompts = [f'Predict possible search queries for the following document:\n{document}\n---\n' for document in
+        prompts = [f'Predict possible search queries for the following document:\n{document}' for document in
                    documents]
-        encoded = self.tokenizer.batch_encode_plus(prompts, return_tensors='pt', padding=True)
+        encoded = self.tokenizer.batch_encode_plus(prompts, return_tensors='pt', padding=True,
+                                                   max_length=self.max_tokens, truncation=True)
+
+        for input_id in encoded['input_ids']:
+            # Check if last three items are not [13, 5634, 13] i.e. \n---\n
+            if not torch.equal(input_id[-3:], torch.tensor([13, 5634, 13])):
+                # Replace them
+                input_id[-3:] = torch.tensor([13, 5634, 13])
+
         encoded['input_ids'] = encoded['input_ids'].to(DEVICE)
         encoded['attention_mask'] = encoded['attention_mask'].to(DEVICE)
         return encoded
@@ -58,10 +68,11 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--collection_path', type=Path, default=DATA_DIR / 'collection.tsv')
     parser.add_argument('--output_path', type=Path, default=DATA_DIR / 'queries.tsv')
+    parser.add_argument('--max_tokens', type=int, default=350)
 
     args = parser.parse_args()
 
-    generator = QueryGenerator(llama_path=args.llama_path)
+    generator = QueryGenerator(llama_path=args.llama_path, max_tokens=args.max_tokens)
     collection = Collection(collection_path=args.collection_path)
 
     batch = []
