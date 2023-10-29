@@ -32,6 +32,10 @@ class Queries:
     def __getitem__(self, qid):
         return self.queries[qid]
 
+    def __iter__(self):
+        for qid in self.queries:
+            yield qid, self.queries[qid]
+
 
 class Collection:
     """
@@ -71,6 +75,15 @@ class Collection:
         for pid in self.collection:
             yield pid, self.collection[pid]
 
+    def batch_iter(self, batch_size: int, start: int = 0):
+        batch = []
+        for pid, passage in self.collection.items()[start:]:
+            batch.append((pid, passage))
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
+        if len(batch) > 0:
+            yield batch
 
 class MSMarcoTriples(Dataset):
     def __init__(self, triples_path: Union[str, Path], queries_path: Union[str, Path],
