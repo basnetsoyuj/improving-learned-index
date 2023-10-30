@@ -1,10 +1,11 @@
 from pathlib import Path
+from typing import Optional
 from typing import Union, Set
 
 from torch.utils.data import Dataset
 
 from src.utils.logger import Logger
-from typing import Optional
+
 logger = Logger(__name__)
 
 
@@ -75,15 +76,16 @@ class Collection:
         for pid in self.collection:
             yield pid, self.collection[pid]
 
-    def batch_iter(self, batch_size: int, start: int = 0):
+    def batch_iter(self, batch_size: int):
         batch = []
-        for pid, passage in self.collection.items()[start:]:
+        for pid, passage in self.collection.items():
             batch.append((pid, passage))
             if len(batch) == batch_size:
                 yield batch
                 batch = []
         if len(batch) > 0:
             yield batch
+
 
 class MSMarcoTriples(Dataset):
     def __init__(self, triples_path: Union[str, Path], queries_path: Union[str, Path],

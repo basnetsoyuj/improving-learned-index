@@ -1,7 +1,7 @@
 import json
 import string
 from itertools import product
-
+import concurrent.futures
 import torch
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
@@ -53,7 +53,8 @@ def attention_pairs(attention_scores, tokens, index):
 
                     # max attention
                     val = max(
-                        max(attention_layer[index, :, x, y].mean().item(), attention_layer[index, :, y, x].mean().item())
+                        max(attention_layer[index, :, x, y].mean().item(),
+                            attention_layer[index, :, y, x].mean().item())
                         for x, y in product(i, j)
                     )
 
@@ -69,13 +70,15 @@ def attention_pairs(attention_scores, tokens, index):
 
 def analyze_attention(batch):
     doc_ids, batch_sentences = zip(*batch)
-    batch_attention_scores = get_attention_scores(batch_sentences)
+    batch_attention_scores = [x.to('cpu') for x in get_attention_scores(batch_sentences)]
     batch_tokens = [tokenizer.tokenize(sentence) for sentence in batch_sentences]
 
-    for i, (doc_id, tokens) in enumerate(zip(doc_ids, batch_tokens)):
-        pairwise_scores = attention_pairs(batch_attention_scores, tokens, i)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=20) as executor:
+        results = executor.map(attention_pairs, [batch_attention_scores]*len(batch_tokens), batch_tokens, range(len(batch_tokens)))
+
+    for doc_id, scores in zip(doc_ids, results):
         with open(DATA_DIR / 'attention_scores' / 'scores.tsv', 'a') as f:
-            json.dump({'doc_id': doc_id, 'scores': pairwise_scores}, f)
+            json.dump({'doc_id': doc_id, 'scores': scores}, f)
             f.write('\n')
 
 
@@ -92,7 +95,7 @@ if __name__ == '__main__':
 
     collection = Collection('/hdd1/home/soyuj/expanded_collection.tsv')
 
-    batch_size = 16
+    batch_size = 20
     dataloader = collection.batch_iter(batch_size)
 
     for batch in tqdm(dataloader):
