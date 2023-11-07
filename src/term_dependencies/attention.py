@@ -1,7 +1,8 @@
+import concurrent.futures
 import json
 import string
 from itertools import product
-import concurrent.futures
+import pickle
 import torch
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
@@ -73,8 +74,9 @@ def analyze_attention(batch):
     batch_attention_scores = [x.to('cpu') for x in get_attention_scores(batch_sentences)]
     batch_tokens = [tokenizer.tokenize(sentence) for sentence in batch_sentences]
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=20) as executor:
-        results = executor.map(attention_pairs, [batch_attention_scores]*len(batch_tokens), batch_tokens, range(len(batch_tokens)))
+    with concurrent.futures.ProcessPoolExecutor(max_workers=40) as executor:
+        results = executor.map(attention_pairs, [batch_attention_scores] * len(batch_tokens), batch_tokens,
+                               range(len(batch_tokens)))
 
     for doc_id, scores in zip(doc_ids, results):
         with open(DATA_DIR / 'attention_scores' / 'scores.tsv', 'a') as f:
