@@ -88,8 +88,7 @@ class Trainer:
                     masks = masks.to(self.gpu_id)
                     labels = labels.view(self.batch_size, -1).to(self.gpu_id)
 
-                    document_term_scores = self.model(input_ids, attention_mask, type_ids)
-                    outputs = (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
+                    outputs = self.get_output_scores(input_ids, attention_mask, type_ids, masks)
 
                     loss = criterion(outputs, labels)
                     loss /= self.gradient_accumulation_steps
@@ -110,6 +109,10 @@ class Trainer:
                         f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
+
+    def get_output_scores(self, input_ids, attention_mask, type_ids, masks):
+        document_term_scores = self.model(input_ids, attention_mask, type_ids)
+        return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
 
     def skip(self):
         if self.gpu_id == 0:

@@ -6,8 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from src.deep_impact.models import DeepImpact as Model
-from src.deep_impact.training import Trainer
+from src.deep_impact.models import DeepPairwiseImpact as Model
+from src.deep_impact.training import PairwiseTrainer as Trainer
 from src.utils.datasets import MSMarcoTriples
 
 

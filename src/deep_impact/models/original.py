@@ -30,12 +30,49 @@ class DeepImpact(BertPreTrainedModel):
             input_ids: torch.Tensor,
             attention_mask: torch.Tensor,
             token_type_ids: torch.Tensor,
-    ):
-        x = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)[0]
-        return self.impact_score_encoder(x)
+    ) -> torch.Tensor:
+        """
+        :param input_ids: Batch of input ids
+        :param attention_mask: Batch of attention masks
+        :param token_type_ids: Batch of token type ids
+        :return: Batch of impact scores
+        """
+        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids)
+        return self.get_impact_scores(bert_output.last_hidden_state)
 
-    @staticmethod
-    def process_query_and_document(query: str, document: str, max_length: Optional[int] = None) -> \
+    def get_bert_output(
+            self,
+            input_ids: torch.Tensor,
+            attention_mask: torch.Tensor,
+            token_type_ids: torch.Tensor,
+            output_attentions: Optional[bool] = None,
+    ) -> torch.Tensor:
+        """
+        :param input_ids: Batch of input ids
+        :param attention_mask: Batch of attention masks
+        :param token_type_ids: Batch of token type ids
+        :param output_attentions: Whether to output attentions
+        :return: Batch of BERT outputs
+        """
+        return self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            output_attentions=output_attentions
+        )
+
+    def get_impact_scores(
+            self,
+            last_hidden_state: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        :param last_hidden_state: Last hidden state from BERT
+        :return: Impact scores
+        """
+        return self.impact_score_encoder(last_hidden_state)
+
+    @classmethod
+    def process_query_and_document(cls, query: str, document: str, max_length: Optional[int] = None) -> \
             (torch.Tensor, torch.Tensor):
         """
         Process query and document to feed to the model
@@ -45,11 +82,11 @@ class DeepImpact(BertPreTrainedModel):
         :return: Tuple: Document Tokens, Mask with 1s corresponding to first tokens of document terms in the query
         """
         if max_length is None:
-            max_length = DeepImpact.max_length
+            max_length = cls.max_length
 
-        query_terms = DeepImpact.process_query(query)
+        query_terms = cls.process_query(query)
 
-        encoded, term_to_token_index = DeepImpact.process_document(document)
+        encoded, term_to_token_index = cls.process_document(document)
 
         mask = np.zeros(max_length, dtype=bool)
         token_indices_of_matching_terms = [v for k, v in term_to_token_index.items() if k in query_terms]
@@ -57,24 +94,24 @@ class DeepImpact(BertPreTrainedModel):
 
         return encoded, torch.from_numpy(mask)
 
-    @staticmethod
-    def process_query(query: str) -> Set[str]:
-        query = DeepImpact.tokenizer.normalizer.normalize_str(query)
-        return set(filter(lambda x: x not in DeepImpact.punctuation,
-                          map(lambda x: x[0], DeepImpact.tokenizer.pre_tokenizer.pre_tokenize_str(query))))
+    @classmethod
+    def process_query(cls, query: str) -> Set[str]:
+        query = cls.tokenizer.normalizer.normalize_str(query)
+        return set(filter(lambda x: x not in cls.punctuation,
+                          map(lambda x: x[0], cls.tokenizer.pre_tokenizer.pre_tokenize_str(query))))
 
-    @staticmethod
-    def process_document(document: str) -> Tuple[tokenizers.Encoding, Dict[str, int]]:
+    @classmethod
+    def process_document(cls, document: str) -> Tuple[tokenizers.Encoding, Dict[str, int]]:
         """
         Encodes the document and maps each unique term (non-punctuation) to its corresponding first token's index.
         :param document: Document string
         :return: Tuple: Encoded document, Dict mapping unique non-punctuation document terms to first token index
         """
 
-        document = DeepImpact.tokenizer.normalizer.normalize_str(document)
-        document_terms = [x[0] for x in DeepImpact.tokenizer.pre_tokenizer.pre_tokenize_str(document)]
+        document = cls.tokenizer.normalizer.normalize_str(document)
+        document_terms = [x[0] for x in cls.tokenizer.pre_tokenizer.pre_tokenize_str(document)]
 
-        encoded = DeepImpact.tokenizer.encode(document_terms, is_pretokenized=True)
+        encoded = cls.tokenizer.encode(document_terms, is_pretokenized=True)
 
         term_index_to_token_index = {}
         counter = 0
@@ -90,18 +127,18 @@ class DeepImpact(BertPreTrainedModel):
         # filter out duplicate terms, punctuations, and terms whose tokens overflow the max length
         for i, term in enumerate(document_terms):
             if term not in filtered_term_to_token_index \
-                    and term not in DeepImpact.punctuation \
+                    and term not in cls.punctuation \
                     and i in term_index_to_token_index:
                 filtered_term_to_token_index[term] = term_index_to_token_index[i]
         return encoded, filtered_term_to_token_index
 
-    @staticmethod
-    def load(checkpoint_path: Optional[Union[str, Path]] = None):
-        model = DeepImpact.from_pretrained("bert-base-uncased")
+    @classmethod
+    def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
+        model = cls.from_pretrained("bert-base-uncased")
         if checkpoint_path is not None:
             ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
-        DeepImpact.tokenizer.enable_truncation(max_length=DeepImpact.max_length)
-        DeepImpact.tokenizer.enable_padding(length=DeepImpact.max_length)
+        cls.tokenizer.enable_truncation(max_length=cls.max_length)
+        cls.tokenizer.enable_padding(length=cls.max_length)
         return model
 
     @torch.no_grad()
