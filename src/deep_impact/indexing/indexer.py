@@ -5,7 +5,7 @@ from typing import Union
 import torch
 from math import ceil
 
-from src.deep_impact.models.original import DeepImpact as Model
+from src.deep_impact.models import DeepPairwiseImpact as Model
 from src.utils.defaults import DEVICE
 
 
