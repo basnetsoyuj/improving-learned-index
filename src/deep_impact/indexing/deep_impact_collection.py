@@ -1,3 +1,4 @@
+from itertools import permutations
 from pathlib import Path
 from typing import Union, Set
 
@@ -22,4 +23,17 @@ class DeepImpactCollection:
         return {term: float(impact_score) for term, impact_score in (pair.split(': ') for pair in string.split(', '))}
 
     def score(self, pid, query_terms: Set[str]):
-        return sum(self[pid].get(term, 0) for term in query_terms)
+        doc_impacts = self[pid]
+        return sum(doc_impacts.get(term, 0) for term in query_terms)
+
+
+class DeepPairwiseImpactCollection(DeepImpactCollection):
+    def score(self, pid, query_terms: Set[str]):
+        scores_sum = super().score(pid=pid, query_terms=query_terms)
+
+        # add pairwise scores
+        doc_impacts = self[pid]
+        for term1, term2 in permutations(query_terms, 2):
+            scores_sum += doc_impacts.get(f'{term1}|{term2}', 0)
+
+        return scores_sum

@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Union
 
 from src.deep_impact.evaluation.metrics import Metrics
-from src.deep_impact.indexing.deep_impact_collection import DeepImpactCollection
-from src.deep_impact.models.original import DeepImpact as Model
+from src.deep_impact.indexing.deep_impact_collection import DeepPairwiseImpactCollection as DeepImpactCollection
+from src.deep_impact.models import DeepPairwiseImpact as Model
 from src.utils.datasets import QueryRelevanceDataset, TopKDataset
 
 
