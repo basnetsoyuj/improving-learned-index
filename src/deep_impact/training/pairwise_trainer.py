@@ -13,7 +13,7 @@ class PairwiseTrainer(Trainer):
             pairwise_indices[-1].extend(combinations.tolist())
             pairwise_indices[-1].extend(combinations.flip(dims=(1,)).tolist())
 
-        document_term_scores, pairwise_term_scores = self.model(
+        document_term_scores, pairwise_term_scores, pairwise_attentions = self.model(
             input_ids,
             attention_mask,
             type_ids,
@@ -21,9 +21,12 @@ class PairwiseTrainer(Trainer):
         )
 
         outputs = (masks * document_term_scores).sum(dim=1).view(self.batch_size, -1)
-
         pairwise_outputs = torch.stack(
-            [scores_per_doc.sum(dim=0) for scores_per_doc in pairwise_term_scores],
+            [
+                (scores_per_doc * attentions_per_doc).sum(dim=0) if len(scores_per_doc) > 0
+                else scores_per_doc.new([0]).detach()
+                for scores_per_doc, attentions_per_doc in zip(pairwise_term_scores, pairwise_attentions)
+            ],
             dim=0
         ).view(self.batch_size, -1)
 
