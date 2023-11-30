@@ -35,3 +35,5 @@ class PairwiseTrainer(Trainer):
     def setup_model(self):
         for param in self.model.impact_score_encoder.parameters():
             param.requires_grad = False
+        for param in self.model.bert.parameters():
+            param.requires_grad = False

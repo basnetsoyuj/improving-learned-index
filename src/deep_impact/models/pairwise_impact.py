@@ -105,6 +105,7 @@ class DeepPairwiseImpact(DeepImpact):
         """
         deep_pairwise_impact_model = cls._load(checkpoint_path)
         deep_impact_model = DeepImpact.load(deep_impact_checkpoint)
+        deep_pairwise_impact_model.bert.load_state_dict(deep_impact_model.bert.state_dict())
         deep_pairwise_impact_model.impact_score_encoder.load_state_dict(
             deep_impact_model.impact_score_encoder.state_dict()
         )
