@@ -31,6 +31,7 @@ def run(
         triples_path: Union[str, Path],
         queries_path: Union[str, Path],
         collection_path: Union[str, Path],
+        deep_impact_checkpoint_path: Union[str, Path],
         checkpoint_dir: Union[str, Path],
         max_length: int,
         seed: int,
@@ -53,7 +54,7 @@ def run(
         num_workers=24,
     )
 
-    model = Model.load()
+    model = Model.load(deep_impact_checkpoint_path)
     Model.tokenizer.enable_truncation(max_length=max_length)
     Model.tokenizer.enable_padding(length=max_length)
 
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("--triples_path", type=Path, required=True, help="Path to the triples dataset")
     parser.add_argument("--queries_path", type=Path, required=True, help="Path to the queries dataset")
     parser.add_argument("--collection_path", type=Path, required=True, help="Path to the collection dataset")
+    parser.add_argument("--deep_impact_checkpoint_path", type=Path, required=True,
+                        help="Path to the DeepImpact checkpoint")
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")
     parser.add_argument("--max_length", type=int, default=300, help="Max Number of tokens in document")
     parser.add_argument("--seed", type=int, default=42, help="Fix seed")

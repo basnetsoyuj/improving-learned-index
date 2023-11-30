@@ -1,5 +1,6 @@
 from itertools import combinations
-from typing import List, Tuple, Dict
+from pathlib import Path
+from typing import List, Tuple, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -93,6 +94,21 @@ class DeepPairwiseImpact(DeepImpact):
             pairwise_scores.append(output[start:end])
             start = end
         return pairwise_scores, pairwise_attentions
+
+    # noinspection PyMethodOverriding
+    @classmethod
+    def load(cls, deep_impact_checkpoint: Union[str, Path], checkpoint_path: Optional[Union[str, Path]] = None):
+        """
+        :param deep_impact_checkpoint: Path to Deep Impact checkpoint
+        :param checkpoint_path: Path to Pairwise Impact checkpoint
+        :return: Pairwise Impact model
+        """
+        deep_pairwise_impact_model = cls._load(checkpoint_path)
+        deep_impact_model = DeepImpact.load(deep_impact_checkpoint)
+        deep_pairwise_impact_model.impact_score_encoder.load_state_dict(
+            deep_impact_model.impact_score_encoder.state_dict()
+        )
+        return deep_pairwise_impact_model
 
     @torch.no_grad()
     def compute_term_impacts(

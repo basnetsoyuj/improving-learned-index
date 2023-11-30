@@ -56,6 +56,7 @@ class Trainer:
                 save_best=save_best,
             )
 
+        self.setup_model()
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
 
     def train(self):
@@ -125,6 +126,9 @@ class Trainer:
                     break
                 if self.gpu_id == 0:
                     progress_bar.update(1)
+
+    def setup_model(self):
+        pass
 
     @staticmethod
     def ddp_setup():

@@ -31,3 +31,7 @@ class PairwiseTrainer(Trainer):
         ).view(self.batch_size, -1)
 
         return outputs + pairwise_outputs
+
+    def setup_model(self):
+        for param in self.model.impact_score_encoder.parameters():
+            param.requires_grad = False

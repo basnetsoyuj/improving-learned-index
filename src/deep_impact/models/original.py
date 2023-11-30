@@ -133,13 +133,21 @@ class DeepImpact(BertPreTrainedModel):
         return encoded, filtered_term_to_token_index
 
     @classmethod
-    def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
+    def _load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
         model = cls.from_pretrained("bert-base-uncased")
         if checkpoint_path is not None:
             ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
         cls.tokenizer.enable_truncation(max_length=cls.max_length)
         cls.tokenizer.enable_padding(length=cls.max_length)
         return model
+
+    @classmethod
+    def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
+        """
+        :param checkpoint_path: Path to checkpoint
+        :return: Deep Impact model
+        """
+        return cls._load(checkpoint_path)
 
     @torch.no_grad()
     def compute_term_impacts(
