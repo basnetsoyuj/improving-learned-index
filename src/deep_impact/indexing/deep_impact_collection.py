@@ -26,6 +26,10 @@ class DeepImpactCollection:
         doc_impacts = self[pid]
         return sum(doc_impacts.get(term, 0) for term in query_terms)
 
+    def __iter__(self):
+        for pid in range(len(self)):
+            yield pid, self[pid]
+
 
 class DeepPairwiseImpactCollection(DeepImpactCollection):
     def score(self, pid, query_terms: Set[str]):
