@@ -6,12 +6,13 @@ from typing import Union
 from tqdm import tqdm
 
 from src.deep_impact.indexing.deep_impact_collection import DeepImpactCollection
+from src.utils.defaults import IMPACT_SCORE_FORMAT, DOC_ID_FORMAT, LOC_FORMAT
 
 
 class InvertedIndexCreator:
     def __init__(self, deep_impact_collection_path: Union[str, Path], output_path: Union[str, Path]):
-        self.deep_impact_collection = DeepImpactCollection(deep_impact_collection_path)
-        self.output_path = output_path
+        self.deep_impact_collection = DeepImpactCollection(Path(deep_impact_collection_path))
+        self.output_path = Path(output_path)
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.vocab = dict()
 
@@ -29,32 +30,26 @@ class InvertedIndexCreator:
 
     def _inverted_index(self):
         inverted_index = []
-        for i, item in tqdm(self.deep_impact_collection):
+        for doc_id, item in tqdm(self.deep_impact_collection):
             for term, val in item.items():
-                inverted_index.append((term, i, val))
+                inverted_index.append((self.vocab[term], doc_id, int(val)))
 
         inverted_index.sort(key=lambda x: (x[0], -x[2]))
-
-        with open(self.output_path / 'inverted_index.txt', 'w', encoding='utf-8') as f:
-            for term, i, val in tqdm(inverted_index):
-                f.write(f'{term}\t{i}\t{val}\n')
 
         start = {}
         end = {}
         with open(self.output_path / 'inverted_index.dat', 'wb') as bf:
-            for term, i, val in tqdm(inverted_index):
-                term_id = self.vocab[term]
+            for term_id, doc_id, val in tqdm(inverted_index):
                 if term_id not in start:
                     start[term_id] = bf.tell()
-                bf.write(struct.pack('I', i))  # 4 bytes
-                bf.write(struct.pack('B', int(val)))  # 1 byte
+                bf.write(struct.pack(DOC_ID_FORMAT, doc_id))  # 4 bytes
+                bf.write(struct.pack(IMPACT_SCORE_FORMAT, val))  # 1 byte
                 end[term_id] = bf.tell()
 
-        with open('inverted_index.idx', 'wb') as bf:
+        with open(self.output_path / 'inverted_index.idx', 'wb') as bf:
             for term_id in tqdm(range(len(self.vocab))):
-                bf.write(struct.pack('I', term_id))  # 4 bytes
-                bf.write(struct.pack('Q', start[term_id]))  # 8 bytes
-                bf.write(struct.pack('Q', end[term_id]))  # 8 bytes
+                bf.write(struct.pack(LOC_FORMAT, start[term_id]))  # 8 bytes
+                bf.write(struct.pack(LOC_FORMAT, end[term_id]))  # 8 bytes
 
     def run(self):
         self._vocab_file()

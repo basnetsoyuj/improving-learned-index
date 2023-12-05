@@ -5,7 +5,7 @@ from typing import Union, Optional
 
 from tqdm import tqdm
 
-from src.utils.defaults import QUANTIZATION_BITS, DATA_DIR
+from src.utils.defaults import IMPACT_SCORE_QUANTIZATION_BITS, DATA_DIR
 from src.utils.logger import Logger
 
 logger = Logger('quantize')
@@ -35,7 +35,7 @@ def quantize_file(
     else:
         logger.info(f'Using given max value: {max_val}')
 
-    scale = (1 << QUANTIZATION_BITS) / max_val
+    scale = ((1 << IMPACT_SCORE_QUANTIZATION_BITS) - 1) / max_val
 
     with open(input_file_path, 'r', encoding='utf-8') as f, open(output_file_path, 'w', encoding='utf-8') as out:
         for doc_id, line in tqdm(enumerate(f)):

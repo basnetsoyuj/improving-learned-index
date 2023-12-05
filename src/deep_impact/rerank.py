@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.deep_impact.evaluation.ranker import Ranker
+from src.deep_impact.evaluation import ReRanker
 from src.utils.defaults import DATA_DIR
 
 if __name__ == "__main__":
@@ -14,6 +14,6 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=Path, default=DATA_DIR / 'reranked.dev.small.tsv')
     args = parser.parse_args()
 
-    ranker = Ranker(**vars(args))
+    ranker = ReRanker(**vars(args))
 
     ranker.run()

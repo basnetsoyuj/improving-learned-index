@@ -22,7 +22,7 @@ class Metrics:
         """
         assert qid not in self.results
 
-        self.results[qid] = rankings
+        self.results[qid] = 0 # rankings
         positives = [i for i, (pid, _) in enumerate(rankings) if pid in gold_positives]
 
         if len(positives) == 0:
