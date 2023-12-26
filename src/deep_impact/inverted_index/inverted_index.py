@@ -54,8 +54,7 @@ class InvertedIndex:
 
     def score(self, query_terms, top_k=1000):
         scores = {}
-        pool = mp.Pool(mp.cpu_count())
-        term_results = pool.map(self.term_docs, query_terms)
+        term_results = map(self.term_docs, query_terms)
         for term, docs in zip(query_terms, term_results):
             for doc_id, score in docs:
                 scores[doc_id] = scores.get(doc_id, 0) + score
