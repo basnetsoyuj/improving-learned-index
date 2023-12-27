@@ -11,7 +11,7 @@ class DeepPairwiseImpact(DeepImpact):
     def __init__(self, config):
         super(DeepPairwiseImpact, self).__init__(config)
         self.pairwise_impact_score_encoder = nn.Sequential(
-            nn.Linear(config.hidden_size * 2, 1),
+            nn.Linear(config.hidden_size * 2 + 1, 1),
             nn.ReLU()
         )
         self.init_weights()
@@ -23,7 +23,7 @@ class DeepPairwiseImpact(DeepImpact):
             attention_mask: torch.Tensor,
             token_type_ids: torch.Tensor,
             pairwise_indices: List[List[List[int]]],
-    ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
         """
         :param input_ids: Batch of input ids
         :param attention_mask: Batch of attention masks
@@ -32,32 +32,59 @@ class DeepPairwiseImpact(DeepImpact):
         :return: Batch of impact scores and pairwise impact scores
         """
 
-        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids)
+        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids, output_attentions=True)
         single_impact_scores = self.get_impact_scores(bert_output.last_hidden_state)
-        pairwise_impact_scores = self.get_pairwise_impact_scores(
+        pairwise_impact_scores, pairwise_attentions = self.get_pairwise_impact_scores(
             bert_output.last_hidden_state,
+            bert_output.attentions,
             pairwise_indices
         )
-        return single_impact_scores, pairwise_impact_scores
+        return single_impact_scores, pairwise_impact_scores, pairwise_attentions
 
     def get_pairwise_impact_scores(
             self,
             last_hidden_state: torch.Tensor,
+            attentions: Tuple[torch.Tensor, ...],
             pairwise_indices: List[List[List[int]]],
-    ) -> List[torch.Tensor]:
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         """
         :param last_hidden_state: Last hidden state from BERT
+        :param attentions: Tuple of attention matrices
         :param pairwise_indices: List of pairwise indices
         :return: Pairwise impact scores
         """
-        pairwise_hidden_states = []
+        pairwise_attention_with_hidden_states = []
+        pairwise_attentions = []
 
         for i, pairwise_indices_per_doc in enumerate(pairwise_indices):
+            attention_scores = []
             for pairs in pairwise_indices_per_doc:
-                pairwise_hidden_states.append(last_hidden_state[i, pairs].flatten())
+                max_attention = max(
+                    max(
+                        attentions[layer][i, :, pairs[0], pairs[1]].mean(),
+                        attentions[layer][i, :, pairs[1], pairs[0]].mean()
+                    )
+                    for layer in range(len(attentions))
+                )
+                max_attention = max_attention.detach().view(1)
+                attention_scores.append(max_attention)
 
-        pairwise_hidden_states = torch.stack(pairwise_hidden_states, dim=0)
-        output = self.pairwise_impact_score_encoder(pairwise_hidden_states)
+                pairwise_attention_with_hidden_states.append(
+                    torch.cat(
+                        (
+                            max_attention,
+                            last_hidden_state[i, pairs].flatten()
+                        )
+                    )
+                )
+
+            if len(attention_scores) == 0:
+                pairwise_attentions.append(last_hidden_state.new([]))
+            else:
+                pairwise_attentions.append(torch.cat(attention_scores, dim=0).view(-1, 1))
+
+        pairwise_attention_with_hidden_states = torch.stack(pairwise_attention_with_hidden_states, dim=0)
+        output = self.pairwise_impact_score_encoder(pairwise_attention_with_hidden_states)
 
         pairwise_scores = []
         start = 0
@@ -65,7 +92,7 @@ class DeepPairwiseImpact(DeepImpact):
             end = start + len(doc_pairs)
             pairwise_scores.append(output[start:end])
             start = end
-        return pairwise_scores
+        return pairwise_scores, pairwise_attentions
 
     @torch.no_grad()
     def compute_term_impacts(
@@ -87,7 +114,7 @@ class DeepPairwiseImpact(DeepImpact):
             list(combinations(sorted(map_.values()), r=2))
             for map_ in documents_term_to_token_index_map
         ]
-        impact_scores, pairwise_impact_scores = self.forward(
+        impact_scores, pairwise_impact_scores, pairwise_attentions = self.forward(
             input_ids,
             attention_mask,
             token_type_ids,
