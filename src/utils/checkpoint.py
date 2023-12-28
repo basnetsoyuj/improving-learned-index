@@ -32,6 +32,7 @@ class ModelCheckpoint:
         :param filename: Checkpoint prefix
         :param save_latest_snapshot: Save the latest snapshot for torchrun & resuming training
         :param save_best: Save the best model (based on the least metric)
+        :param batch_size: Batch size for resuming training
         """
         if filename is None:
             filename = model.__class__.__name__
@@ -71,7 +72,8 @@ class ModelCheckpoint:
         checkpoint = {
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'step': self.step
+            'step': self.step,
+            'batch_size': self.batch_size,
         }
         if metric:
             checkpoint['metric'] = metric

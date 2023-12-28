@@ -47,6 +47,12 @@ class Trainer:
                 save_every=save_every,
                 save_best=save_best,
             )
+            if self.checkpoint_callback.batch_size:
+                # assume n_ranks info is multiplied in batch_size
+                self.checkpoint_callback.step = (self.checkpoint_callback.step * self.checkpoint_callback.batch_size) \
+                                                // (self.batch_size * self.n_ranks)
+            else:
+                self.logger.info(f"Assuming previous training was done on same number of GPUs & batch size.")
         else:
             self.checkpoint_callback = ModelCheckpoint(
                 model=self.model,
@@ -55,12 +61,10 @@ class Trainer:
                 save_every=save_every,
                 save_best=save_best,
             )
-
+        self.checkpoint_callback.batch_size = self.batch_size * self.n_ranks
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
 
     def train(self):
-        assert self.batch_size % self.n_ranks == 0, "Batch size must be divisible by the number of GPUs"
-
         torch.manual_seed(self.seed)
         torch.cuda.manual_seed(self.seed)
 
