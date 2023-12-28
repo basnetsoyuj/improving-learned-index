@@ -29,22 +29,21 @@ class InvertedIndexCreator:
                 f.write(f'{term}\n')
 
     def _inverted_index(self):
-        inverted_index = []
+        inverted_index = [[] for _ in range(len(self.vocab))]
         for doc_id, item in tqdm(self.deep_impact_collection):
             for term, val in item.items():
-                inverted_index.append((self.vocab[term], doc_id, int(val)))
-
-        inverted_index.sort(key=lambda x: (x[0], -x[2]))
+                inverted_index[self.vocab[term]].append((doc_id, int(val)))
 
         start = {}
         end = {}
         with open(self.output_path / 'inverted_index.dat', 'wb') as bf:
-            for term_id, doc_id, val in tqdm(inverted_index):
-                if term_id not in start:
-                    start[term_id] = bf.tell()
-                bf.write(struct.pack(DOC_ID_FORMAT, doc_id))  # 4 bytes
-                bf.write(struct.pack(IMPACT_SCORE_FORMAT, val))  # 1 byte
-                end[term_id] = bf.tell()
+            for term_id, docs_and_vals in tqdm(enumerate(inverted_index)):
+                for doc_id, val in sorted(docs_and_vals, key=lambda x: x[1], reverse=True):
+                    if term_id not in start:
+                        start[term_id] = bf.tell()
+                    bf.write(struct.pack(DOC_ID_FORMAT, doc_id))  # 4 bytes
+                    bf.write(struct.pack(IMPACT_SCORE_FORMAT, val))  # 1 byte
+                    end[term_id] = bf.tell()
 
         with open(self.output_path / 'inverted_index.idx', 'wb') as bf:
             for term_id in tqdm(range(len(self.vocab))):
