@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Callable, Dict, Optional, Union, Self
+from typing import Callable, Dict, Optional, Union
 
 import torch
 
@@ -21,6 +21,7 @@ class ModelCheckpoint:
             filename: Optional[str] = None,
             save_latest_snapshot: bool = True,
             save_best: bool = False,
+            batch_size: int = 0,
     ) -> None:
         """
         Initialize the model checkpoint object
@@ -44,6 +45,7 @@ class ModelCheckpoint:
         self.save_every = save_every
         self.save_best = save_best
         self.save_latest_snapshot = save_latest_snapshot
+        self.batch_size = batch_size
         self.step = 0
 
         if self.save_best:
@@ -95,7 +97,7 @@ class ModelCheckpoint:
                 str,
                 Dict[str, str]
             ]] = None,
-    ) -> Self:
+    ) -> 'ModelCheckpoint':
         """
         Load the model checkpoint
         :param model: Torch model
@@ -124,7 +126,8 @@ class ModelCheckpoint:
             save_every=save_every,
             filename=filename or last_checkpoint_path.stem.rsplit('_', 1)[0],
             save_latest_snapshot=save_latest_snapshot,
-            save_best=save_best
+            save_best=save_best,
+            batch_size=checkpoint.get('batch_size', 0),
         )
         obj.step = checkpoint.get('step', 0)
         if save_best and 'metric' in checkpoint:
