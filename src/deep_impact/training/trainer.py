@@ -51,7 +51,7 @@ class Trainer:
                 # assume n_ranks info is multiplied in batch_size
                 self.checkpoint_callback.step = (self.checkpoint_callback.step * self.checkpoint_callback.batch_size) \
                                                 // (self.batch_size * self.n_ranks)
-            else:
+            elif self.gpu_id == 0:
                 self.logger.info(f"Assuming previous training was done on same number of GPUs & batch size.")
         else:
             self.checkpoint_callback = ModelCheckpoint(
