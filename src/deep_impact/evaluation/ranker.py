@@ -6,6 +6,7 @@ from src.deep_impact.inverted_index import InvertedIndex
 from src.deep_impact.models import DeepImpact as Model
 from src.utils.datasets import QueryRelevanceDataset, Queries
 import time
+from itertools import product
 
 class Ranker:
     def __init__(
@@ -37,6 +38,9 @@ class Ranker:
 
     def rank(self, qid: int):
         query_terms = Model.process_query(query=self.queries[qid])
+        for term1, term2 in product(query_terms, query_terms):
+            if term1 != term2:
+                query_terms.add(f'{term1}|{term2}')
         scores = self.index.score(query_terms=query_terms)
         self.metrics.add_result(qid=qid, rankings=scores, gold_positives=self.qrels[qid])
         self.metrics.log_metrics()

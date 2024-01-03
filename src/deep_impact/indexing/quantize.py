@@ -42,7 +42,9 @@ def quantize_file(
             data = []
             for t in line.strip().split(', '):
                 term, score = t.strip().split(': ')
-                data.append(f'{term}: {quantize(float(score), scale)}')
+                val = quantize(float(score), scale)
+                if val > 0:
+                    data.append(f'{term}: {val}')
             out.write(', '.join(data) + '\n')
 
 
