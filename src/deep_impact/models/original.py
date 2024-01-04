@@ -13,7 +13,7 @@ from src.utils.checkpoint import ModelCheckpoint
 
 class DeepImpact(BertPreTrainedModel):
     max_length = 512
-    tokenizer = tokenizers.Tokenizer.from_pretrained('bert-base-uncased')
+    tokenizer = tokenizers.Tokenizer.from_pretrained('Luyu/co-condenser-marco')
     punctuation = set(string.punctuation)
 
     def __init__(self, config):
@@ -134,7 +134,7 @@ class DeepImpact(BertPreTrainedModel):
 
     @classmethod
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
-        model = cls.from_pretrained("bert-base-uncased")
+        model = cls.from_pretrained("Luyu/co-condenser-marco")
         if checkpoint_path is not None:
             ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
         cls.tokenizer.enable_truncation(max_length=cls.max_length)
