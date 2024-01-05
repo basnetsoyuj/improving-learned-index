@@ -50,7 +50,7 @@ def run(
         collate_fn=partial(collate_fn, max_length=max_length),
         sampler=DistributedSampler(dataset),
         drop_last=True,
-        num_workers=24,
+        num_workers=0,
     )
 
     model = Model.load()

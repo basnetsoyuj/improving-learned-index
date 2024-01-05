@@ -13,7 +13,7 @@ from src.utils.checkpoint import ModelCheckpoint
 
 class DeepImpact(BertPreTrainedModel):
     max_length = 512
-    tokenizer = tokenizers.Tokenizer.from_pretrained('Luyu/co-condenser-marco')
+    tokenizer = tokenizers.Tokenizer.from_pretrained('bert-base-uncased')
     punctuation = set(string.punctuation)
 
     def __init__(self, config):

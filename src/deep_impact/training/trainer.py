@@ -98,7 +98,7 @@ class Trainer:
                     loss /= self.gradient_accumulation_steps
 
                 scaler.scale(loss).backward()
-                train_loss += loss.item()
+                train_loss += loss.detach().cpu().item()
 
                 if i % self.gradient_accumulation_steps == 0:
                     scaler.unscale_(self.optimizer)
