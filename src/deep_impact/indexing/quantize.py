@@ -12,7 +12,7 @@ logger = Logger('quantize')
 
 
 def quantize(value: float, scale: float):
-    return int(math.ceil(value * scale))
+    return int(value * scale)
 
 
 def find_max_value(input_file_path: Union[str, Path]):
