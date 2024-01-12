@@ -4,7 +4,11 @@ from .trainer import Trainer
 
 
 class PairwiseTrainer(Trainer):
-    def get_output_scores(self, input_ids, attention_mask, type_ids, masks):
+    def get_output_scores(self, batch):
+        encoded_list, masks, labels = batch
+        input_ids, attention_mask, type_ids = self.get_input_tensors(encoded_list)
+        masks = masks.to(self.gpu_id)
+
         pairwise_indices = []
         for document_mask in masks.squeeze(-1):
             pairwise_indices.append([])

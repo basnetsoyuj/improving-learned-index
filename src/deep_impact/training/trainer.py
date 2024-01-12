@@ -84,15 +84,8 @@ class Trainer:
 
             for i, batch in enumerate(self.train_data):
                 with torch.cuda.amp.autocast():
-                    encoded_list, masks, labels = batch
-                    input_ids = torch.tensor([x.ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
-                    attention_mask = torch.tensor([x.attention_mask for x in encoded_list], dtype=torch.long).to(
-                        self.gpu_id)
-                    type_ids = torch.tensor([x.type_ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
-                    masks = masks.to(self.gpu_id)
-                    labels = labels.view(self.batch_size, -1).to(self.gpu_id)
-
-                    outputs = self.get_output_scores(input_ids, attention_mask, type_ids, masks)
+                    outputs = self.get_output_scores(batch)
+                    labels = batch[-1].view(self.batch_size, -1).to(self.gpu_id)
 
                     loss = criterion(outputs, labels)
                     loss /= self.gradient_accumulation_steps
@@ -114,8 +107,19 @@ class Trainer:
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
 
-    def get_output_scores(self, input_ids, attention_mask, type_ids, masks):
+    def get_input_tensors(self, encoded_list):
+        input_ids = torch.tensor([x.ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
+        attention_mask = torch.tensor([x.attention_mask for x in encoded_list], dtype=torch.long).to(
+            self.gpu_id)
+        type_ids = torch.tensor([x.type_ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
+        return input_ids, attention_mask, type_ids
+
+    def get_output_scores(self, batch):
+        encoded_list, masks, labels = batch
+        input_ids, attention_mask, type_ids = self.get_input_tensors(encoded_list)
         document_term_scores = self.model(input_ids, attention_mask, type_ids)
+
+        masks = masks.to(self.gpu_id)
         return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
 
     def skip(self):
