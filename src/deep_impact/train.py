@@ -78,7 +78,7 @@ def run(
     )
 
     model = Model.load()
-    Model.tokenizer.enable_truncation(max_length=max_length)
+    Model.tokenizer.enable_truncation(max_length=max_length, strategy='longest_first')
     Model.tokenizer.enable_padding(length=max_length)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
