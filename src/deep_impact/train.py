@@ -6,8 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from src.deep_impact.models import DeepPairwiseImpact as Model
-from src.deep_impact.training import PairwiseTrainer as Trainer
+from src.deep_impact.models import DeepImpact as Model
+from src.deep_impact.training import Trainer, CrossEncoderTrainer
 from src.utils.datasets import MSMarcoTriples
 
 
@@ -27,6 +27,20 @@ def collate_fn(batch, max_length=None):
     return encoded_list, torch.stack(masks, dim=0).unsqueeze(-1), torch.tensor(labels, dtype=torch.float)
 
 
+def cross_encoder_collate_fn(batch):
+    encoded_list, labels = [], []
+    for query, positive_document, negative_document in batch:
+        encoded_token = Model.process_cross_encoder_document_and_query(positive_document, query)
+        encoded_list.append(encoded_token)
+        labels.append(1)
+
+        encoded_token = Model.process_cross_encoder_document_and_query(negative_document, query)
+        encoded_list.append(encoded_token)
+        labels.append(0)
+
+    return encoded_list, torch.tensor(labels, dtype=torch.float)
+
+
 def run(
         triples_path: Union[str, Path],
         queries_path: Union[str, Path],
@@ -39,15 +53,25 @@ def run(
         save_every: int,
         save_best: bool,
         gradient_accumulation_steps: int,
+        cross_encoder: bool = False,
 ):
-    Trainer.ddp_setup()
+    # DeepImpact
+    trainer_cls = Trainer
+    collate_function = partial(collate_fn, max_length=max_length)
+
+    # CrossEncoder
+    if cross_encoder:
+        trainer_cls = CrossEncoderTrainer
+        collate_function = cross_encoder_collate_fn
+
+    trainer_cls.ddp_setup()
     dataset = MSMarcoTriples(triples_path, queries_path, collection_path)
     train_dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
         pin_memory=True,
-        collate_fn=partial(collate_fn, max_length=max_length),
+        collate_fn=collate_function,
         sampler=DistributedSampler(dataset),
         drop_last=True,
         num_workers=0,
@@ -59,7 +83,7 @@ def run(
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    trainer = Trainer(
+    trainer = trainer_cls(
         model=model,
         optimizer=optimizer,
         train_data=train_dataloader,
@@ -71,7 +95,7 @@ def run(
         gradient_accumulation_steps=gradient_accumulation_steps,
     )
     trainer.train()
-    Trainer.ddp_cleanup()
+    trainer_cls.ddp_cleanup()
 
 
 if __name__ == "__main__":
@@ -89,6 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_every", type=int, default=20000, help="Save checkpoint every n steps")
     parser.add_argument("--save_best", action="store_true", help="Save the best model")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps")
+    parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
 
     args = parser.parse_args()
 

@@ -133,6 +133,20 @@ class DeepImpact(BertPreTrainedModel):
         return encoded, filtered_term_to_token_index
 
     @classmethod
+    def process_cross_encoder_document_and_query(
+            cls,
+            document: str,
+            query: str,
+    ) -> tokenizers.Encoding:
+        """
+        Encodes the document and query for cross-encoder models
+        :param document: Document string
+        :param query: Query string
+        :return: Encoded document and query
+        """
+        return cls.tokenizer.encode(f'{document} [SEP] {query}')
+
+    @classmethod
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
         model = cls.from_pretrained("Luyu/co-condenser-marco")
         if checkpoint_path is not None:
