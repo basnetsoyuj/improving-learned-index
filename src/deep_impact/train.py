@@ -82,6 +82,7 @@ def run(
         pairwise: bool = False,
         cross_encoder: bool = False,
         distil: bool = False,
+        start_with: Union[str, Path] = None,
 ):
     # DeepImpact
     model_cls = DeepImpact
@@ -117,7 +118,10 @@ def run(
         num_workers=0,
     )
 
-    model = model_cls.load()
+    if start_with:
+        model = model_cls.load(start_with)
+    else:
+        model = model_cls.load()
     model_cls.tokenizer.enable_truncation(max_length=max_length, strategy='longest_first')
     model_cls.tokenizer.enable_padding(length=max_length)
 
@@ -156,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("--pairwise", action="store_true", help="Use pairwise training")
     parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
     parser.add_argument("--distil", action="store_true", help="Use distillation loss")
+    parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
 
     args = parser.parse_args()
 

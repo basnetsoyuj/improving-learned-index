@@ -151,7 +151,7 @@ class DeepImpact(BertPreTrainedModel):
         model = cls.from_pretrained("Luyu/co-condenser-marco")
         if checkpoint_path is not None:
             ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
-        cls.tokenizer.enable_truncation(max_length=cls.max_length)
+        cls.tokenizer.enable_truncation(max_length=cls.max_length, strategy='longest_first')
         cls.tokenizer.enable_padding(length=cls.max_length)
         return model
 
