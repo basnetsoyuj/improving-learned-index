@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union
 
 from src.deep_impact.indexing import Indexer
+from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
 from src.utils.defaults import COLLECTION_PATH, DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE
 from src.utils.logger import Logger
 
@@ -14,11 +15,13 @@ def run(
         num_processes: int,
         process_batch_size: int,
         model_batch_size: int,
+        pairwise: bool = False,
 ):
     start = time.time()
 
     logger = Logger(Path(__file__).stem)
     indexer = Indexer(
+        model_cls=DeepPairwiseImpact if pairwise else DeepImpact,
         model_checkpoint_path=model_checkpoint_path,
         num_processes=num_processes,
         model_batch_size=model_batch_size,
@@ -52,6 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("--process_batch_size", type=int, default=50 * BATCH_SIZE,
                         help="Batch size for the process pool")
     parser.add_argument("--model_batch_size", type=int, default=BATCH_SIZE, help="Batch size for the model")
+    parser.add_argument("--pairwise", action='store_true', help="Use pairwise model")
 
     args = parser.parse_args()
 

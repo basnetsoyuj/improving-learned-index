@@ -1,22 +1,22 @@
 import multiprocessing
+from math import ceil
 from pathlib import Path
 from typing import Union
 
 import torch
-from math import ceil
 
-from src.deep_impact.models import DeepPairwiseImpact as Model
 from src.utils.defaults import DEVICE
 
 
 class Indexer:
     def __init__(
             self,
+            model_cls: torch.nn.Module,
             model_checkpoint_path: Union[str, Path],
             num_processes: int,
             model_batch_size: int,
     ):
-        self.model = Model.load(model_checkpoint_path)
+        self.model = model_cls.load(model_checkpoint_path)
         self.model.to(DEVICE)
         self.model.eval()
         self.pool = multiprocessing.Pool(processes=num_processes)

@@ -63,6 +63,7 @@ class Trainer:
             )
         self.checkpoint_callback.batch_size = self.batch_size * self.n_ranks
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
+        self.criterion = torch.nn.CrossEntropyLoss()
 
     def train(self):
         torch.manual_seed(self.seed)
@@ -70,7 +71,7 @@ class Trainer:
 
         self.model.train()
 
-        criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.CrossEntropyLoss()
         scaler = torch.cuda.amp.GradScaler()
 
         # Resume training if checkpoint exists i.e. step > 0
@@ -85,9 +86,8 @@ class Trainer:
             for i, batch in enumerate(self.train_data):
                 with torch.cuda.amp.autocast():
                     outputs = self.get_output_scores(batch)
-                    labels = batch[-1].view(self.batch_size, -1).to(self.gpu_id)
+                    loss = self.evaluate_loss(outputs, batch)
 
-                    loss = criterion(outputs, labels)
                     loss /= self.gradient_accumulation_steps
 
                 scaler.scale(loss).backward()
@@ -107,6 +107,8 @@ class Trainer:
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
 
+            self.checkpoint_callback.save('final')
+
     def get_input_tensors(self, encoded_list):
         input_ids = torch.tensor([x.ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
         attention_mask = torch.tensor([x.attention_mask for x in encoded_list], dtype=torch.long).to(
@@ -115,17 +117,22 @@ class Trainer:
         return input_ids, attention_mask, type_ids
 
     def get_output_scores(self, batch):
-        encoded_list, masks, labels = batch
-        input_ids, attention_mask, type_ids = self.get_input_tensors(encoded_list)
+        input_ids, attention_mask, type_ids = self.get_input_tensors(batch['encoded_list'])
         document_term_scores = self.model(input_ids, attention_mask, type_ids)
 
-        masks = masks.to(self.gpu_id)
+        masks = batch['masks'].to(self.gpu_id)
         return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
+
+    def evaluate_loss(self, outputs, batch):
+        labels = batch['labels'].view(self.batch_size, -1).to(self.gpu_id)
+        return self.criterion(outputs, labels)
 
     def skip(self):
         if self.gpu_id == 0:
-            self.logger.info(f"Resuming training from step {self.checkpoint_callback.step}. "
-                             f"Skipping {self.checkpoint_callback.step * self.batch_size * self.n_ranks} seen examples.")
+            self.logger.info(
+                f"Resuming training from step {self.checkpoint_callback.step}. "
+                f"Skipping {self.checkpoint_callback.step * self.batch_size * self.n_ranks} seen examples."
+            )
 
         with tqdm(total=self.checkpoint_callback.step) as progress_bar:
             for i, _ in enumerate(self.train_data, start=1):
