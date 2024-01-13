@@ -8,7 +8,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer
-from src.utils.datasets import MSMarcoTriples
+from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
@@ -88,6 +88,7 @@ def run(
     model_cls = DeepImpact
     trainer_cls = Trainer
     collate_function = partial(collate_fn, model_cls=DeepImpact, max_length=max_length)
+    dataset_cls = MSMarcoTriples
 
     # Pairwise
     if pairwise:
@@ -104,9 +105,10 @@ def run(
     if distil:
         trainer_cls = DistilTrainer
         collate_function = partial(distil_collate_fn, max_length=max_length)
+        dataset_cls = DistilHardNegatives
 
     trainer_cls.ddp_setup()
-    dataset = MSMarcoTriples(triples_path, queries_path, collection_path)
+    dataset = dataset_cls(triples_path, queries_path, collection_path)
     train_dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

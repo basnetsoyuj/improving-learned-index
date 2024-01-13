@@ -3,6 +3,7 @@ from typing import Optional
 from typing import Union, Set
 
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from src.utils.logger import Logger
 
@@ -96,7 +97,9 @@ class MSMarcoTriples(Dataset):
         :param queries_path: Path to the queries dataset. Each line is a query of (qid, query)
         :param collection_path: Path to the collection dataset. Each line is a passage of (pid, passage)
         """
+        logger.info(f"Loading triples from {triples_path}")
         self.triples = self._load_triples(triples_path)
+
         self.queries = Queries(queries_path)
         self.collection = Collection(collection_path)
 
@@ -104,7 +107,7 @@ class MSMarcoTriples(Dataset):
     def _load_triples(path):
         triples = []
         with open(path, encoding='utf-8') as f:
-            for line in f:
+            for line in tqdm(f):
                 qid, pos, neg = map(int, line.strip().split("\t"))
                 triples.append((qid, pos, neg))
         return triples
@@ -208,7 +211,7 @@ class DistilHardNegatives(MSMarcoTriples):
     def _load_triples(path):
         triples = []
         with open(path, encoding='utf-8') as f:
-            for line in f:
+            for line in tqdm(f):
                 qid, pos_id, neg_id, pos_score, neg_score = line.strip().split("\t")
                 triples.append((int(qid), int(pos_id), int(neg_id), float(pos_score), float(neg_score)))
         return triples

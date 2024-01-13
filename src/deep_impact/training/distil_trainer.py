@@ -35,6 +35,6 @@ class DistilTrainer(Trainer):
 
         # distillation loss
         teacher_scores = batch['scores'].view(self.batch_size, -1).to(self.gpu_id)
-        distil_loss = self.distil_loss(outputs, teacher_scores)
+        distil_loss = self.distil_loss(teacher_scores, outputs)
 
         return loss + distil_loss
