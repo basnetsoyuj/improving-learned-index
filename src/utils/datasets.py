@@ -201,3 +201,23 @@ class TopKDataset:
 
     def keys(self):
         return self.top_k.keys()
+
+
+class DistilHardNegatives(MSMarcoTriples):
+    @staticmethod
+    def _load_triples(path):
+        triples = []
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                qid, pos_id, neg_id, pos_score, neg_score = line.strip().split("\t")
+                triples.append((int(qid), int(pos_id), int(neg_id), float(pos_score), float(neg_score)))
+        return triples
+
+    def __getitem__(self, idx):
+        """
+        Get the query, pos, neg document and score by an index.
+        :param idx: The index.
+        :return: The query, positive (relevant) doc and negative (non-relevant) doc, and their scores.
+        """
+        qid, pos_id, neg_id, pos_score, neg_score = self.triples[idx]
+        return self.queries[qid], self.collection[pos_id], self.collection[neg_id], pos_score, neg_score

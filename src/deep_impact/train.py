@@ -6,39 +6,65 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from src.deep_impact.models import DeepImpact as Model
-from src.deep_impact.training import Trainer, CrossEncoderTrainer
+from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
+from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer
 from src.utils.datasets import MSMarcoTriples
 
 
-def collate_fn(batch, max_length=None):
+def collate_fn(batch, model_cls=DeepImpact, max_length=None):
     encoded_list, masks, labels = [], [], []
     for query, positive_document, negative_document in batch:
-        encoded_token, mask = Model.process_query_and_document(query, positive_document, max_length=max_length)
+        encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
         labels.append(1)
 
-        encoded_token, mask = Model.process_query_and_document(query, negative_document, max_length=max_length)
+        encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
         labels.append(0)
 
-    return encoded_list, torch.stack(masks, dim=0).unsqueeze(-1), torch.tensor(labels, dtype=torch.float)
+    return {
+        'encoded_list': encoded_list,
+        'masks': torch.stack(masks, dim=0).unsqueeze(-1),
+        'labels': torch.tensor(labels, dtype=torch.float)
+    }
 
 
-def cross_encoder_collate_fn(batch):
+def cross_encoder_collate_fn(batch, model_cls=DeepImpact):
     encoded_list, labels = [], []
     for query, positive_document, negative_document in batch:
-        encoded_token = Model.process_cross_encoder_document_and_query(positive_document, query)
+        encoded_token = model_cls.process_cross_encoder_document_and_query(positive_document, query)
         encoded_list.append(encoded_token)
         labels.append(1)
 
-        encoded_token = Model.process_cross_encoder_document_and_query(negative_document, query)
+        encoded_token = model_cls.process_cross_encoder_document_and_query(negative_document, query)
         encoded_list.append(encoded_token)
         labels.append(0)
 
-    return encoded_list, torch.tensor(labels, dtype=torch.float)
+    return {'encoded_list': encoded_list, 'labels': torch.tensor(labels, dtype=torch.float)}
+
+
+def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+    encoded_list, masks, labels, scores = [], [], [], []
+    for query, positive_document, negative_document, positive_score, negative_score in batch:
+        encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
+        encoded_list.append(encoded_token)
+        masks.append(mask)
+        labels.append(1)
+        scores.append(positive_score)
+
+        encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
+        encoded_list.append(encoded_token)
+        masks.append(mask)
+        labels.append(0)
+        scores.append(negative_score)
+    return {
+        'encoded_list': encoded_list,
+        'masks': torch.stack(masks, dim=0).unsqueeze(-1),
+        'labels': torch.tensor(labels, dtype=torch.float),
+        'scores': torch.tensor(scores, dtype=torch.float),
+    }
 
 
 def run(
@@ -53,16 +79,30 @@ def run(
         save_every: int,
         save_best: bool,
         gradient_accumulation_steps: int,
+        pairwise: bool = False,
         cross_encoder: bool = False,
+        distil: bool = False,
 ):
     # DeepImpact
+    model_cls = DeepImpact
     trainer_cls = Trainer
-    collate_function = partial(collate_fn, max_length=max_length)
+    collate_function = partial(collate_fn, model_cls=DeepImpact, max_length=max_length)
+
+    # Pairwise
+    if pairwise:
+        model_cls = DeepPairwiseImpact
+        trainer_cls = PairwiseTrainer
+        collate_function = partial(collate_fn, model_cls=DeepPairwiseImpact, max_length=max_length)
 
     # CrossEncoder
-    if cross_encoder:
+    elif cross_encoder:
         trainer_cls = CrossEncoderTrainer
         collate_function = cross_encoder_collate_fn
+
+    # Use distillation loss
+    if distil:
+        trainer_cls = DistilTrainer
+        collate_function = partial(distil_collate_fn, max_length=max_length)
 
     trainer_cls.ddp_setup()
     dataset = MSMarcoTriples(triples_path, queries_path, collection_path)
@@ -77,9 +117,9 @@ def run(
         num_workers=0,
     )
 
-    model = Model.load()
-    Model.tokenizer.enable_truncation(max_length=max_length, strategy='longest_first')
-    Model.tokenizer.enable_padding(length=max_length)
+    model = model_cls.load()
+    model_cls.tokenizer.enable_truncation(max_length=max_length, strategy='longest_first')
+    model_cls.tokenizer.enable_padding(length=max_length)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
@@ -113,7 +153,9 @@ if __name__ == "__main__":
     parser.add_argument("--save_every", type=int, default=20000, help="Save checkpoint every n steps")
     parser.add_argument("--save_best", action="store_true", help="Save the best model")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps")
+    parser.add_argument("--pairwise", action="store_true", help="Use pairwise training")
     parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
+    parser.add_argument("--distil", action="store_true", help="Use distillation loss")
 
     args = parser.parse_args()
 

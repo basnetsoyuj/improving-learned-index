@@ -56,16 +56,16 @@ class ModelCheckpoint:
         self.step += 1
 
         if self.step % self.save_every == 0:
-            self._save(suffix=str(self.step), metric=metric)
+            self.save(suffix=str(self.step), metric=metric)
             if self.save_latest_snapshot:
-                self._save(suffix=self.LATEST_SNAPSHOT_SUFFIX, metric=metric)
+                self.save(suffix=self.LATEST_SNAPSHOT_SUFFIX, metric=metric)
 
         if self.save_best:
             assert metric is not None, "Metric must be provided for save_best=True"
             if metric < self.best_metric:
-                self._save(suffix='best', metric=metric)
+                self.save(suffix='best', metric=metric)
 
-    def _save(self, suffix: str, metric: float = None):
+    def save(self, suffix: str, metric: float = None):
         # to handle DataParallel models
         model = self.model.module if hasattr(self.model, 'module') else self.model
 
@@ -134,6 +134,6 @@ class ModelCheckpoint:
         obj.step = checkpoint.get('step', 0)
         if save_best and 'metric' in checkpoint:
             obj.best_metric = checkpoint['metric']
-            obj._save(suffix='best', metric=obj.best_metric)
+            obj.save(suffix='best', metric=obj.best_metric)
 
         return obj

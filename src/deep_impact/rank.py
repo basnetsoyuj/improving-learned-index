@@ -11,6 +11,7 @@ if __name__ == "__main__":
     parser.add_argument("--qrels_path", type=Path, default=DATA_DIR / 'deep-impact' / 'qrels.dev.small.tsv')
     parser.add_argument("--queries_path", type=Path, default=DATA_DIR / 'deep-impact' / 'queries.dev.tsv')
     parser.add_argument("--output_path", type=Path, default=DATA_DIR / 'reranked.dev.small.tsv')
+    parser.add_argument("--pairwise", action='store_true', help="Use pairwise model")
     args = parser.parse_args()
 
     ranker = Ranker(**vars(args))
