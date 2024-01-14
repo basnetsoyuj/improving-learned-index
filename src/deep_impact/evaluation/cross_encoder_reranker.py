@@ -33,8 +33,8 @@ class CrossEncoderReRanker:
     def run(self):
         with tqdm(total=len(self.top_k)) as pbar:
             for qid in self.top_k.keys():
-                for rank, (pid, score) in enumerate(self.rerank(qid, pbar=pbar), start=1):
-                    self.run_file.write(qid, pid, rank, score)
+                scores = self.rerank(qid, pbar=pbar)
+                self.run_file.writelines(qid, scores)
                 pbar.update(1)
 
     @torch.no_grad()

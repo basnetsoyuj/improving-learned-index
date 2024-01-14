@@ -234,6 +234,11 @@ class RunFile:
         with open(self.run_file_path, 'a', encoding='utf-8') as f:
             f.write(f'{qid}\t{pid}\t{rank}\t{score}\n')
 
+    def writelines(self, qid, scores):
+        with open(self.run_file_path, 'a', encoding='utf-8') as f:
+            for rank, (pid, score) in enumerate(scores, start=1):
+                f.write(f'{qid}\t{pid}\t{rank}\t{score}\n')
+
     def read(self):
         with open(self.run_file_path, 'r', encoding='utf-8') as f:
             for line in f:
