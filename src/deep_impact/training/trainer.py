@@ -105,7 +105,7 @@ class Trainer:
                     progress_bar.update(1)
                     progress_bar.set_description(
                         f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
-                        f"Current Loss: {current_loss * 100:.4f}"
+                        f"Current Loss: {current_loss * 100:.4f}, "
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
 
