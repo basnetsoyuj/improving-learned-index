@@ -42,21 +42,20 @@ class CrossEncoderReRanker:
         query = self.top_k.queries[qid]
         top_k_pids = self.top_k[qid]
 
-        batch_encoded_list = []
+        batch = []
         scores = []
         for i, pid in enumerate(top_k_pids):
             pbar.set_description(f"Reranking query {qid} ({i + 1}/{len(top_k_pids)})")
+            batch.append(self.collection[pid])
 
-            document = self.collection[pid]
-            batch_encoded_list.append(DeepImpactCrossEncoder.process_cross_encoder_document_and_query(document, query))
-
-            if len(batch_encoded_list) == self.batch_size or i == len(top_k_pids) - 1:
+            if len(batch) == self.batch_size or i == len(top_k_pids) - 1:
+                batch_encoded_list = DeepImpactCrossEncoder.process_cross_encoder_documents_and_query(batch, query)
                 input_ids = torch.tensor([x.ids for x in batch_encoded_list], dtype=torch.long)
                 attention_mask = torch.tensor([x.attention_mask for x in batch_encoded_list], dtype=torch.long)
                 type_ids = torch.tensor([x.type_ids for x in batch_encoded_list], dtype=torch.long)
 
                 scores.extend(self.model(input_ids=input_ids, attention_mask=attention_mask,
                                          token_type_ids=type_ids).squeeze().cpu().tolist())
-                batch_encoded_list = []
+                batch = []
 
         return sorted(zip(top_k_pids, scores), key=lambda x: x[1], reverse=True)

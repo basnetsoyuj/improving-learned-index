@@ -1,3 +1,5 @@
+from typing import List
+
 import tokenizers
 import torch
 
@@ -33,3 +35,17 @@ class DeepImpactCrossEncoder(DeepImpact):
         :return: Encoded document and query
         """
         return cls.tokenizer.encode(f'{document} [SEP] {query}')
+
+    @classmethod
+    def process_cross_encoder_documents_and_query(
+            cls,
+            documents: List[str],
+            query: str,
+    ) -> List[tokenizers.Encoding]:
+        """
+        Encodes documents and a query for cross-encoder model reranking
+        :param documents: Document strings
+        :param query: Query string
+        :return: List of Encoded document and query
+        """
+        return cls.tokenizer.encode_batch([f'{document} [SEP] {query}' for document in documents])
