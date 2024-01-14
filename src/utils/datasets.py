@@ -186,7 +186,7 @@ class TopKDataset:
         self.max_len = max(lens)
         self.avg_len = round(sum(lens) / len(top_k), 2)
 
-        logger.info(f"Loaded {len(top_k)} queries:")
+        logger.info(f"Loaded {len(top_k)} queries.")
         logger.info(f"Top K Passages distribution: min={self.min_len}, max={self.max_len}, avg={self.avg_len}")
 
         return queries, passages, top_k
@@ -224,3 +224,23 @@ class DistilHardNegatives(MSMarcoTriples):
         """
         qid, pos_id, neg_id, pos_score, neg_score = self.triples[idx]
         return self.queries[qid], self.collection[pos_id], self.collection[neg_id], pos_score, neg_score
+
+
+class RunFile:
+    def __init__(self, run_file_path: Union[str, Path]):
+        self.run_file_path = run_file_path
+
+    def write(self, qid, pid, rank, score):
+        with open(self.run_file_path, 'a', encoding='utf-8') as f:
+            f.write(f'{qid}\t{pid}\t{rank}\t{score}\n')
+
+    def writelines(self, qid, scores):
+        with open(self.run_file_path, 'a', encoding='utf-8') as f:
+            for rank, (pid, score) in enumerate(scores, start=1):
+                f.write(f'{qid}\t{pid}\t{rank}\t{score}\n')
+
+    def read(self):
+        with open(self.run_file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                qid, pid, rank, score = line.strip().split('\t')
+                yield int(qid), int(pid), int(rank), float(score)

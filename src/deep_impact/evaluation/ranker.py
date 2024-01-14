@@ -1,12 +1,12 @@
-import time
 from itertools import product
 from pathlib import Path
 from typing import Union
 
-from src.deep_impact.evaluation.metrics import Metrics
+from tqdm.auto import tqdm
+
 from src.deep_impact.inverted_index import InvertedIndex
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
-from src.utils.datasets import QueryRelevanceDataset, Queries
+from src.utils.datasets import QueryRelevanceDataset, Queries, RunFile
 
 
 class Ranker:
@@ -21,27 +21,17 @@ class Ranker:
         self.index = InvertedIndex(index_path=index_path)
         self.qrels = QueryRelevanceDataset(qrels_path=qrels_path)
         self.queries = Queries(queries_path=queries_path)
-        self.metrics = Metrics(
-            mrr_depths=[10],
-            recall_depths=[10, 20, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-        )
-        self.output_path = Path(output_path)
+        self.run_file = RunFile(run_file_path=output_path)
+
         self.pairwise = pairwise
         self.model_cls = DeepPairwiseImpact if pairwise else DeepImpact
 
     def run(self):
-        avg_time = 0
-        for i, qid in enumerate(self.qrels.keys(), start=1):
-            start = time.time()
-            self.rank(qid=qid)
-            end = time.time()
-            avg_time += end - start
-            print(f'Average time for query {i}: {avg_time / i}')
-
-            # rankings = self.rank(qid=qid)
-            # with open(self.output_path, 'a') as f:
-            #     for pid, score in rankings:
-            #         f.write(f'{qid}\t{pid}\t{score}\n')
+        with tqdm(total=len(self.qrels)) as pbar:
+            for qid in self.qrels.keys():
+                for rank, (pid, score) in enumerate(self.rank(qid), start=1):
+                    self.run_file.write(qid, pid, rank, score)
+                pbar.update(1)
 
     def rank(self, qid: int):
         query_terms = self.model_cls.process_query(query=self.queries[qid])
@@ -51,7 +41,4 @@ class Ranker:
                 if term1 != term2:
                     query_terms.add(f'{term1}|{term2}')
 
-        scores = self.index.score(query_terms=query_terms)
-        self.metrics.add_result(qid=qid, rankings=scores, gold_positives=self.qrels[qid])
-        self.metrics.log_metrics()
-        return scores
+        return self.index.score(query_terms=query_terms)

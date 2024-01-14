@@ -1,52 +1,65 @@
-from typing import List
+from collections import defaultdict
+from pathlib import Path
+from typing import List, Union
 
-from src.utils.datasets import QueryRelevanceDataset, TopKDataset
+from tqdm.auto import tqdm
+
+from src.utils.datasets import QueryRelevanceDataset, TopKDataset, RunFile
 from src.utils.logger import Logger
 
 logger = Logger('metrics')
 
 
 class Metrics:
-    def __init__(self, mrr_depths: List[int], recall_depths: List[int]):
-        self.results = {}
+    def __init__(
+            self,
+            run_file_path: Union[str, Path],
+            qrels_path: Union[str, Path],
+            mrr_depths: List[int],
+            recall_depths: List[int]
+    ):
+        # already seen positive passages for query
+        self.seen = {}
+
+        self.run_file = RunFile(run_file_path=run_file_path)
+        self.qrels = QueryRelevanceDataset(qrels_path=qrels_path)
         self.mrr_sums = {depth: 0 for depth in mrr_depths}
         self.recall_sums = {depth: 0 for depth in recall_depths}
 
-    def add_result(self, qid, rankings, gold_positives):
+    def evaluate(self):
         """
-        Add a result to the metrics.
-        :param qid: Query ID
-        :param rankings: List of (pid, score) tuples
-        :param gold_positives: Set of positive passage IDs (from Qrels)
+        Evaluate the metrics.
         :return: None
         """
-        assert qid not in self.results
+        relevant_pids_and_ranks = defaultdict(list)
+        for qid, pid, rank, _ in self.run_file.read():
+            if pid not in self.qrels[qid]:
+                continue
+            relevant_pids_and_ranks[qid].append(rank)
 
-        self.results[qid] = 0 # rankings
-        positives = [i for i, (pid, _) in enumerate(rankings) if pid in gold_positives]
+        assert set(relevant_pids_and_ranks.keys()) == set(
+            self.qrels.keys()), "Run file does not contain all queries in the Qrels file"
 
-        if len(positives) == 0:
-            logger.warning(f"Query {qid} has no positive results")
-            return
+        for qid, ranks in tqdm(relevant_pids_and_ranks.items()):
+            ranks.sort()
 
-        first_positive_rank = positives[0]
+            best_rank = ranks[0]
+            for depth in self.mrr_sums:
+                if best_rank <= depth:
+                    self.mrr_sums[depth] += 1.0 / best_rank
 
-        for depth in self.mrr_sums:
-            self.mrr_sums[depth] += (1.0 / (first_positive_rank + 1)) if first_positive_rank < depth else 0.0
+            for depth in self.recall_sums:
+                positives_upto_depth = len([0 for i in ranks if i <= depth])
+                self.recall_sums[depth] += positives_upto_depth / len(self.qrels[qid])
 
-        for depth in self.recall_sums:
-            positives_upto_depth = len([i for i in positives if i < depth])
-            self.recall_sums[depth] += positives_upto_depth / len(gold_positives)
-
-    def log_metrics(self):
-        logger.info(f"\nEvaluated {len(self.results)} queries")
+        logger.info(f"\nEvaluated {len(self.qrels)} queries")
 
         for depth in sorted(self.mrr_sums):
-            mrr = round(self.mrr_sums[depth] / len(self.results), 3)
+            mrr = round(self.mrr_sums[depth] / len(self.qrels), 3)
             logger.info(f"MRR@{depth} = {mrr}")
 
         for depth in sorted(self.recall_sums):
-            recall = round(self.recall_sums[depth] / len(self.results), 3)
+            recall = round(self.recall_sums[depth] / len(self.qrels), 3)
             logger.info(f"Recall@{depth} = {recall}")
 
     @staticmethod
