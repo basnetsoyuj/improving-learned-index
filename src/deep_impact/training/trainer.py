@@ -91,7 +91,8 @@ class Trainer:
                     loss /= self.gradient_accumulation_steps
 
                 scaler.scale(loss).backward()
-                train_loss += loss.detach().cpu().item()
+                current_loss = loss.detach().cpu().item()
+                train_loss += current_loss
 
                 if i % self.gradient_accumulation_steps == 0:
                     scaler.unscale_(self.optimizer)
@@ -104,6 +105,7 @@ class Trainer:
                     progress_bar.update(1)
                     progress_bar.set_description(
                         f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
+                        f"Current Loss: {current_loss * 100:.4f}"
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
 

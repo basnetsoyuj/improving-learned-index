@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
+from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer
 from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
 
@@ -31,14 +31,14 @@ def collate_fn(batch, model_cls=DeepImpact, max_length=None):
     }
 
 
-def cross_encoder_collate_fn(batch, model_cls=DeepImpact):
+def cross_encoder_collate_fn(batch):
     encoded_list, labels = [], []
     for query, positive_document, negative_document in batch:
-        encoded_token = model_cls.process_cross_encoder_document_and_query(positive_document, query)
+        encoded_token = DeepImpactCrossEncoder.process_cross_encoder_document_and_query(positive_document, query)
         encoded_list.append(encoded_token)
         labels.append(1)
 
-        encoded_token = model_cls.process_cross_encoder_document_and_query(negative_document, query)
+        encoded_token = DeepImpactCrossEncoder.process_cross_encoder_document_and_query(negative_document, query)
         encoded_list.append(encoded_token)
         labels.append(0)
 
@@ -98,6 +98,7 @@ def run(
 
     # CrossEncoder
     elif cross_encoder:
+        model_cls = DeepImpactCrossEncoder
         trainer_cls = CrossEncoderTrainer
         collate_function = cross_encoder_collate_fn
 
