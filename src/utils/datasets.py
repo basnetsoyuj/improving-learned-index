@@ -233,3 +233,9 @@ class RunFile:
     def write(self, qid, pid, rank, score):
         with open(self.run_file_path, 'a', encoding='utf-8') as f:
             f.write(f'{qid}\t{pid}\t{rank}\t{score}\n')
+
+    def read(self):
+        with open(self.run_file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                qid, pid, rank, score = line.strip().split('\t')
+                yield int(qid), int(pid), int(rank), float(score)

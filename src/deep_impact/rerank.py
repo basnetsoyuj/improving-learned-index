@@ -12,6 +12,7 @@ if __name__ == "__main__":
     parser.add_argument("--top_k_path", type=Path, default=DATA_DIR / 'deep-impact' / 'top1000.dev')
     parser.add_argument("--qrels_path", type=Path, default=DATA_DIR / 'deep-impact' / 'qrels.dev.small.tsv')
     parser.add_argument("--output_path", type=Path, default=DATA_DIR / 'reranked.dev.small.tsv')
+    parser.add_argument("--pairwise", action='store_true')
     args = parser.parse_args()
 
     ranker = ReRanker(**vars(args))
