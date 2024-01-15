@@ -141,24 +141,18 @@ class DeepImpact(BertPreTrainedModel):
         cls.tokenizer.enable_padding(length=cls.max_length)
         return model
 
-    @torch.no_grad()
+    @staticmethod
     def compute_term_impacts(
-            self,
             documents_term_to_token_index_map: List[Dict[str, int]],
-            input_ids: torch.Tensor,
-            attention_mask: torch.Tensor,
-            token_type_ids: torch.Tensor,
+            outputs: torch.Tensor,
     ) -> List[List[Tuple[str, float]]]:
         """
         Computes the impact scores of each term in each document
         :param documents_term_to_token_index_map: List of dictionaries mapping each unique term to its first token index
-        :param input_ids: Batch of input ids
-        :param attention_mask: Batch of attention masks
-        :param token_type_ids: Batch of token type ids
+        :param outputs: Batch of model outputs
         :return: Batch of lists of tuples of document terms and their impact scores
         """
-        impact_scores = self.forward(input_ids, attention_mask, token_type_ids).squeeze(-1)
-        impact_scores = impact_scores.cpu().numpy()
+        impact_scores = outputs.squeeze(-1).cpu().numpy()
 
         term_impacts = []
         for i, term_to_token_index_map in enumerate(documents_term_to_token_index_map):

@@ -18,9 +18,6 @@ class Metrics:
             mrr_depths: List[int],
             recall_depths: List[int]
     ):
-        # already seen positive passages for query
-        self.seen = {}
-
         self.run_file = RunFile(run_file_path=run_file_path)
         self.qrels = QueryRelevanceDataset(qrels_path=qrels_path)
         self.mrr_sums = {depth: 0 for depth in mrr_depths}
@@ -36,9 +33,6 @@ class Metrics:
             if pid not in self.qrels[qid]:
                 continue
             relevant_pids_and_ranks[qid].append(rank)
-
-        assert set(relevant_pids_and_ranks.keys()) == set(
-            self.qrels.keys()), "Run file does not contain all queries in the Qrels file"
 
         for qid, ranks in tqdm(relevant_pids_and_ranks.items()):
             ranks.sort()

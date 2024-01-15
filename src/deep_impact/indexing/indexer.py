@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Union
 
 import torch
-
-from src.utils.defaults import DEVICE
+from torch.nn import DataParallel
 
 
 class Indexer:
@@ -16,15 +15,20 @@ class Indexer:
             num_processes: int,
             model_batch_size: int,
     ):
+        self.model_cls = model_cls
+        self.device = torch.device("cuda")
         self.model = model_cls.load(model_checkpoint_path)
-        self.model.to(DEVICE)
+        self.model.to(self.device)
         self.model.eval()
+        if torch.cuda.device_count() > 1:
+            self.model = DataParallel(self.model)
+
         self.pool = multiprocessing.Pool(processes=num_processes)
         self.batch_size = model_batch_size
 
     @torch.no_grad()
     def index(self, batch, file):
-        every_encoded_and_term_to_token_index_map = list(self.pool.map(self.model.process_document, batch))
+        every_encoded_and_term_to_token_index_map = list(self.pool.map(self.model_cls.process_document, batch))
         every_term_impacts = []
 
         for batch_idx in range(ceil(len(batch) / self.batch_size)):
@@ -32,15 +36,25 @@ class Indexer:
             end = start + self.batch_size
             batch_encoded, batch_term_to_token_index_map = zip(*every_encoded_and_term_to_token_index_map[start:end])
 
-            input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long).to(DEVICE)
-            attention_mask = torch.tensor([x.attention_mask for x in batch_encoded], dtype=torch.long).to(DEVICE)
-            type_ids = torch.tensor([x.type_ids for x in batch_encoded], dtype=torch.long).to(DEVICE)
+            input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long)
+            attention_mask = torch.tensor([x.attention_mask for x in batch_encoded], dtype=torch.long)
+            type_ids = torch.tensor([x.type_ids for x in batch_encoded], dtype=torch.long)
 
-            every_term_impacts.extend(self.model.compute_term_impacts(
+            # ------------------ DeepImpact ------------------
+            outputs = self.model(input_ids, attention_mask, type_ids)
+            # ---------------------------------------------------
+
+            # ------------------ DeepPairwiseImpact ------------------
+            # pairwise_indices = [
+            #     list(combinations(sorted(map_.values()), r=2))
+            #     for map_ in batch_term_to_token_index_map
+            # ]
+            # outputs = self.model(input_ids, attention_mask, type_ids, pairwise_indices)
+            # ---------------------------------------------------
+
+            every_term_impacts.extend(self.model_cls.compute_term_impacts(
                 documents_term_to_token_index_map=batch_term_to_token_index_map,
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=type_ids,
+                outputs=outputs,
             ))
 
         lines = []

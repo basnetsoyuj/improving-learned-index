@@ -26,7 +26,8 @@ class CrossEncoderReRanker:
         self.model = DeepImpactCrossEncoder.load(checkpoint_path=checkpoint_path)
         self.model.to(self.device)
         self.model.eval()
-        self.model = DataParallel(self.model)
+        if torch.cuda.device_count() > 1:
+            self.model = DataParallel(self.model)
 
         self.run_file = RunFile(run_file_path=output_path)
 
@@ -55,7 +56,7 @@ class CrossEncoderReRanker:
                 type_ids = torch.tensor([x.type_ids for x in batch_encoded_list], dtype=torch.long)
 
                 scores.extend(self.model(input_ids=input_ids, attention_mask=attention_mask,
-                                         token_type_ids=type_ids).squeeze().cpu().tolist())
+                                         token_type_ids=type_ids).squeeze(-1).cpu().tolist())
                 batch = []
 
         return sorted(zip(top_k_pids, scores), key=lambda x: x[1], reverse=True)

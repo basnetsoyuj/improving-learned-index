@@ -1,5 +1,4 @@
 from itertools import product
-from multiprocessing import Pool
 from pathlib import Path
 from typing import Union
 
@@ -8,11 +7,6 @@ from tqdm.auto import tqdm
 from src.deep_impact.inverted_index import InvertedIndex
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
 from src.utils.datasets import QueryRelevanceDataset, Queries, RunFile
-
-
-def rank(args):
-    index, qid, query_terms = args
-    return qid, index.score(query_terms=query_terms)
 
 
 class Ranker:
@@ -35,11 +29,9 @@ class Ranker:
         self.model_cls = DeepPairwiseImpact if pairwise else DeepImpact
 
     def run(self):
-        with Pool(self.num_workers, maxtasksperchild=1) as p, tqdm(total=len(self.qrels)) as pbar:
-            for qid, scores in p.imap_unordered(rank, [(self.index, qid, self.get_query_terms(qid)) for qid in
-                                                       self.qrels.keys()]):
-                self.run_file.writelines(qid, scores)
-                pbar.update(1)
+        for qid in tqdm(self.qrels.keys()):
+            scores = self.rank(qid=qid)
+            self.run_file.writelines(qid, scores)
 
     def get_query_terms(self, qid):
         query_terms = self.model_cls.process_query(query=self.queries[qid])
@@ -50,3 +42,6 @@ class Ranker:
                     query_terms.add(f'{term1}|{term2}')
 
         return query_terms
+
+    def rank(self, qid):
+        return self.index.score(query_terms=self.get_query_terms(qid=qid))

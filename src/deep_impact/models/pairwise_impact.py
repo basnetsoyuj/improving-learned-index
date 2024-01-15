@@ -94,32 +94,18 @@ class DeepPairwiseImpact(DeepImpact):
             start = end
         return pairwise_scores, pairwise_attentions
 
-    @torch.no_grad()
+    @staticmethod
     def compute_term_impacts(
-            self,
             documents_term_to_token_index_map: List[Dict[str, int]],
-            input_ids: torch.Tensor,
-            attention_mask: torch.Tensor,
-            token_type_ids: torch.Tensor,
+            outputs: Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]],
     ) -> List[List[Tuple[str, float]]]:
         """
         Computes the impact scores of each term in each document
         :param documents_term_to_token_index_map: List of dictionaries mapping each unique term to its first token index
-        :param input_ids: Batch of input ids
-        :param attention_mask: Batch of attention masks
-        :param token_type_ids: Batch of token type ids
+        :param outputs: Tuple of batch of impact scores and batch of pairwise impact scores and pairwise indices
         :return: Batch of lists of tuples of document terms and their impact scores
         """
-        pairwise_indices = [
-            list(combinations(sorted(map_.values()), r=2))
-            for map_ in documents_term_to_token_index_map
-        ]
-        impact_scores, pairwise_impact_scores, pairwise_attentions = self.forward(
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            pairwise_indices
-        )
+        impact_scores, pairwise_impact_scores, _ = outputs
         impact_scores = impact_scores.squeeze(-1).cpu().numpy()
         pairwise_impact_scores = [x.squeeze(-1).cpu().numpy() for x in pairwise_impact_scores]
 
