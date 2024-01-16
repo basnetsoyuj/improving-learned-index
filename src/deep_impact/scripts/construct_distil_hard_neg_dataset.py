@@ -31,7 +31,7 @@ def run(qrels_path: Path, scores_path: Path, output_path: Path):
     print(f'Writing to {output_path}')
     with open(output_path, 'w', encoding='utf-8') as f:
         for qid, pid, nid in tqdm(list_):
-            f.write(f'{qid}\t{pid}\t{nid}\t {positive_scores[qid][pid]}\t{scores[qid][nid]}\n')
+            f.write(f'{qid}\t{pid}\t{nid}\t{positive_scores[qid][pid]}\t{scores[qid][nid]}\n')
 
 
 if __name__ == '__main__':
