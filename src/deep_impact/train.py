@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
-from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer
+from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, InBatchNegativesTrainer
 from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
 
 
@@ -82,6 +82,7 @@ def run(
         pairwise: bool = False,
         cross_encoder: bool = False,
         distil: bool = False,
+        in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
 ):
     # DeepImpact
@@ -107,6 +108,9 @@ def run(
         trainer_cls = DistilTrainer
         collate_function = partial(distil_collate_fn, max_length=max_length)
         dataset_cls = DistilHardNegatives
+
+    if in_batch_negatives:
+        trainer_cls = InBatchNegativesTrainer
 
     trainer_cls.ddp_setup()
     dataset = dataset_cls(triples_path, queries_path, collection_path)
@@ -163,6 +167,7 @@ if __name__ == "__main__":
     parser.add_argument("--pairwise", action="store_true", help="Use pairwise training")
     parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
     parser.add_argument("--distil", action="store_true", help="Use distillation loss")
+    parser.add_argument("--in_batch_negatives", action="store_true", help="Use in-batch negatives")
     parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
 
     args = parser.parse_args()
