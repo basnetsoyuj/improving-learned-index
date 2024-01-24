@@ -81,18 +81,22 @@ class DeepImpact(BertPreTrainedModel):
         :param max_length: Max number of tokens to process
         :return: Tuple: Document Tokens, Mask with 1s corresponding to first tokens of document terms in the query
         """
+        query_terms = cls.process_query(query)
+        encoded, term_to_token_index = cls.process_document(document)
+
+        return encoded, cls.get_query_document_token_mask(query_terms, term_to_token_index, max_length)
+
+    @classmethod
+    def get_query_document_token_mask(cls, query_terms: Set[str], term_to_token_index: Dict[str, int],
+                                      max_length: Optional[int] = None) -> torch.Tensor:
         if max_length is None:
             max_length = cls.max_length
-
-        query_terms = cls.process_query(query)
-
-        encoded, term_to_token_index = cls.process_document(document)
 
         mask = np.zeros(max_length, dtype=bool)
         token_indices_of_matching_terms = [v for k, v in term_to_token_index.items() if k in query_terms]
         mask[token_indices_of_matching_terms] = True
 
-        return encoded, torch.from_numpy(mask)
+        return torch.from_numpy(mask)
 
     @classmethod
     def process_query(cls, query: str) -> Set[str]:
