@@ -7,63 +7,79 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
-from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, InBatchNegativesTrainer
+from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, \
+    InBatchNegativesTrainer
 from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
-    encoded_list, masks, labels = [], [], []
+    encoded_list, masks = [], []
     for query, positive_document, negative_document in batch:
         encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
-        labels.append(1)
 
         encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
-        labels.append(0)
 
     return {
         'encoded_list': encoded_list,
         'masks': torch.stack(masks, dim=0).unsqueeze(-1),
-        'labels': torch.tensor(labels, dtype=torch.float)
     }
 
 
 def cross_encoder_collate_fn(batch):
-    encoded_list, labels = [], []
+    encoded_list = []
     for query, positive_document, negative_document in batch:
         encoded_token = DeepImpactCrossEncoder.process_cross_encoder_document_and_query(positive_document, query)
         encoded_list.append(encoded_token)
-        labels.append(1)
 
         encoded_token = DeepImpactCrossEncoder.process_cross_encoder_document_and_query(negative_document, query)
         encoded_list.append(encoded_token)
-        labels.append(0)
 
-    return {'encoded_list': encoded_list, 'labels': torch.tensor(labels, dtype=torch.float)}
+    return {'encoded_list': encoded_list}
 
 
 def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
-    encoded_list, masks, labels, scores = [], [], [], []
+    encoded_list, masks, scores = [], [], []
     for query, positive_document, negative_document, positive_score, negative_score in batch:
         encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
-        labels.append(1)
         scores.append(positive_score)
 
         encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
         encoded_list.append(encoded_token)
         masks.append(mask)
-        labels.append(0)
         scores.append(negative_score)
+
     return {
         'encoded_list': encoded_list,
         'masks': torch.stack(masks, dim=0).unsqueeze(-1),
-        'labels': torch.tensor(labels, dtype=torch.float),
         'scores': torch.tensor(scores, dtype=torch.float),
+    }
+
+
+def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+    queries, positive_documents, negative_documents = zip(*batch)
+    queries_terms = [model_cls.process_query(query) for query in queries]
+    negatives = [model_cls.process_document(document) for document in negative_documents]
+
+    encoded_list, masks = [], []
+    for i, (query_terms, positive_document) in enumerate(zip(queries_terms, positive_documents)):
+        encoded_token, term_to_token_index = model_cls.process_document(positive_document)
+
+        encoded_list.append(encoded_token)
+        masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index, max_length))
+
+        encoded_list.append(negatives[i][0])
+        for _, term_to_token_index in negatives:
+            masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index, max_length))
+
+    return {
+        'encoded_list': encoded_list,
+        'masks': torch.stack(masks, dim=0),
     }
 
 
@@ -111,6 +127,7 @@ def run(
 
     if in_batch_negatives:
         trainer_cls = InBatchNegativesTrainer
+        collate_function = partial(in_batch_negatives_collate_fn, max_length=max_length)
 
     trainer_cls.ddp_setup()
     dataset = dataset_cls(triples_path, queries_path, collection_path)
