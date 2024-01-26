@@ -126,7 +126,7 @@ class Trainer:
         return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
 
     def evaluate_loss(self, outputs, batch):
-        labels = batch['labels'].view(self.batch_size, -1).to(self.gpu_id)
+        labels = torch.zeros(self.batch_size, dtype=torch.long).to(self.gpu_id)
         return self.criterion(outputs, labels)
 
     def skip(self):
