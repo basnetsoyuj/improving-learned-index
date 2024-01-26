@@ -37,7 +37,7 @@ class InvertedIndex:
             start, end = struct.unpack(LOC_BLOCK_FORMAT, bf.read(LOC_BLOCK_BYTES))
         return term_id, start, end
 
-    @lru_cache(maxsize=10000)
+    # @lru_cache(maxsize=10000)
     def term_docs(self, term):
         term_id, start, end = self.term_location(term)
         if term_id is None:
