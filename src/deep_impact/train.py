@@ -9,7 +9,7 @@ from torch.utils.data.distributed import DistributedSampler
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, \
     InBatchNegativesTrainer
-from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
+from src.utils.datasets import MSMarcoTriples, DistillationScores
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
@@ -43,16 +43,12 @@ def cross_encoder_collate_fn(batch):
 
 def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
     encoded_list, masks, scores = [], [], []
-    for query, positive_document, negative_document, positive_score, negative_score in batch:
-        encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
-        encoded_list.append(encoded_token)
-        masks.append(mask)
-        scores.append(positive_score)
-
-        encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
-        encoded_list.append(encoded_token)
-        masks.append(mask)
-        scores.append(negative_score)
+    for query, pid_score_list in batch:
+        for passage, score in pid_score_list:
+            encoded_token, mask = model_cls.process_query_and_document(query, passage, max_length=max_length)
+            encoded_list.append(encoded_token)
+            masks.append(mask)
+            scores.append(score)
 
     return {
         'encoded_list': encoded_list,
@@ -84,7 +80,7 @@ def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact, max_length=None):
 
 
 def run(
-        triples_path: Union[str, Path],
+        dataset_path: Union[str, Path],
         queries_path: Union[str, Path],
         collection_path: Union[str, Path],
         checkpoint_dir: Union[str, Path],
@@ -123,14 +119,14 @@ def run(
     if distil:
         trainer_cls = DistilTrainer
         collate_function = partial(distil_collate_fn, max_length=max_length)
-        dataset_cls = DistilHardNegatives
+        dataset_cls = DistillationScores
 
     if in_batch_negatives:
         trainer_cls = InBatchNegativesTrainer
         collate_function = partial(in_batch_negatives_collate_fn, max_length=max_length)
 
     trainer_cls.ddp_setup()
-    dataset = dataset_cls(triples_path, queries_path, collection_path)
+    dataset = dataset_cls(dataset_path, queries_path, collection_path)
     train_dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -170,7 +166,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser("Distributed Training of DeepImpact on MS MARCO triples dataset")
-    parser.add_argument("--triples_path", type=Path, required=True, help="Path to the triples dataset")
+    parser.add_argument("--dataset_path", type=Path, required=True, help="Path to the training dataset")
     parser.add_argument("--queries_path", type=Path, required=True, help="Path to the queries dataset")
     parser.add_argument("--collection_path", type=Path, required=True, help="Path to the collection dataset")
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")

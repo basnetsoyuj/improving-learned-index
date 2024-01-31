@@ -1,3 +1,5 @@
+import gzip
+import pickle
 from pathlib import Path
 from typing import Optional
 from typing import Union, Set
@@ -224,6 +226,33 @@ class DistilHardNegatives(MSMarcoTriples):
         """
         qid, pos_id, neg_id, pos_score, neg_score = self.triples[idx]
         return self.queries[qid], self.collection[pos_id], self.collection[neg_id], pos_score, neg_score
+
+
+class DistillationScores:
+    def __init__(self, scores_path: Union[str, Path], queries_path: Union[str, Path],
+                 collection_path: Union[str, Path], batch_size: int = 100):
+        self.scores = self._load_scores(scores_path)
+        self.queries = Queries(queries_path)
+        self.collection = Collection(collection_path)
+        self.batch_size = batch_size
+
+    @staticmethod
+    def _load_scores(path):
+        with gzip.open(path, 'rb') as f:
+            scores = pickle.load(f)
+        return scores
+
+    def __len__(self):
+        return len(self.scores)
+
+    def __getitem__(self, qid):
+        return self.queries[qid], [(self.collection[pid], score) for pid, score in self.scores[qid]]
+
+    def __iter__(self):
+        for qid in self.queries:
+            for i in range(0, len(self.collection), self.batch_size):
+                yield self.queries[qid], [(self.collection[pid], score) for pid, score in
+                                          self.scores[qid][i:i + self.batch_size]]
 
 
 class RunFile:
