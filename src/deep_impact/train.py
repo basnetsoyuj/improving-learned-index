@@ -120,11 +120,13 @@ def run(
 
     # Use distillation loss
     if distil_mse:
-        trainer_cls = DistilTrainer(loss_cls=DistilMarginMSE)
+        trainer_cls = DistilTrainer
+        trainer_cls.loss = DistilMarginMSE()
         collate_function = partial(distil_collate_fn, max_length=max_length)
         dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
     elif distil_kl:
-        trainer_cls = DistilTrainer(loss_cls=DistilKLLoss)
+        trainer_cls = DistilTrainer
+        trainer_cls.loss = DistilKLLoss()
         collate_function = partial(distil_collate_fn, max_length=max_length)
         dataset_cls = DistillationScores
 

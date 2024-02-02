@@ -46,11 +46,9 @@ class DistilKLLoss:
 
 
 class DistilTrainer(Trainer):
-    def __init__(self, loss_cls, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.distil_loss = loss_cls()
+    loss = DistilKLLoss()
 
     def evaluate_loss(self, outputs, batch):
         # distillation loss
         teacher_scores = batch['scores'].view(self.batch_size, -1).to(self.gpu_id)
-        return self.distil_loss(outputs, teacher_scores)
+        return self.loss(outputs, teacher_scores)
