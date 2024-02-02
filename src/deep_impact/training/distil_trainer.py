@@ -15,12 +15,19 @@ class DistilMarginMSE:
     def __call__(self, output, target):
         """
         Calculates the MSE loss between the teacher and student scores
-        :param target: Shape (batch_size, 2) with positive and negative predicted scores
-        :param output: Shape (batch_size, 2) with positive and negative teacher scores
+        :param output: Shape (batch_size, n) with positive and negative predicted scores
+        :param target: Shape (batch_size, n) with positive and negative teacher scores
         :return: MSE loss
         """
-        student_margin = -torch.diff(target, dim=1).squeeze()
-        teacher_margin = -torch.diff(output, dim=1).squeeze()
+        student_positive_scores = output[:, 0]
+        student_negative_scores = output[:, 1:]
+        student_margin = student_positive_scores.unsqueeze(1) - student_negative_scores
+
+        # Calculate margin for teacher
+        teacher_positive_scores = target[:, 0]
+        teacher_negative_scores = target[:, 1:]
+        teacher_margin = teacher_positive_scores.unsqueeze(1) - teacher_negative_scores
+
         return self.loss(student_margin, teacher_margin)
 
 
@@ -39,14 +46,11 @@ class DistilKLLoss:
 
 
 class DistilTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, loss_cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.distil_loss = DistilMarginMSE()
-        self.distil_loss = DistilKLLoss()
+        self.distil_loss = loss_cls()
 
     def evaluate_loss(self, outputs, batch):
         # distillation loss
         teacher_scores = batch['scores'].view(self.batch_size, -1).to(self.gpu_id)
-        distil_loss = self.distil_loss(outputs, teacher_scores)
-
-        return distil_loss
+        return self.distil_loss(outputs, teacher_scores)

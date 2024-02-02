@@ -9,6 +9,7 @@ from torch.utils.data.distributed import DistributedSampler
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, \
     InBatchNegativesTrainer
+from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLoss
 from src.utils.datasets import MSMarcoTriples, DistillationScores
 
 
@@ -93,9 +94,11 @@ def run(
         gradient_accumulation_steps: int,
         pairwise: bool = False,
         cross_encoder: bool = False,
-        distil: bool = False,
+        distil_mse: bool = False,
+        distil_kl: bool = False,
         in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
+        qrels_path: Union[str, Path] = None,
 ):
     # DeepImpact
     model_cls = DeepImpact
@@ -116,8 +119,12 @@ def run(
         collate_function = cross_encoder_collate_fn
 
     # Use distillation loss
-    if distil:
-        trainer_cls = DistilTrainer
+    if distil_mse:
+        trainer_cls = DistilTrainer(loss_cls=DistilMarginMSE)
+        collate_function = partial(distil_collate_fn, max_length=max_length)
+        dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
+    elif distil_kl:
+        trainer_cls = DistilTrainer(loss_cls=DistilKLLoss)
         collate_function = partial(distil_collate_fn, max_length=max_length)
         dataset_cls = DistillationScores
 
@@ -179,11 +186,20 @@ if __name__ == "__main__":
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps")
     parser.add_argument("--pairwise", action="store_true", help="Use pairwise training")
     parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
-    parser.add_argument("--distil", action="store_true", help="Use distillation loss")
+    parser.add_argument("--distil_mse", action="store_true", help="Use distillation loss with Mean Squared Error")
+    parser.add_argument("--distil_kl", action="store_true", help="Use distillation loss with KL divergence loss")
     parser.add_argument("--in_batch_negatives", action="store_true", help="Use in-batch negatives")
     parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
 
+    # required for distillation loss with Margin MSE
+    parser.add_argument("--qrels_path", type=Path, default=None, help="Path to the qrels file")
+
     args = parser.parse_args()
+
+    assert not (args.distil_mse and args.distil_kl), "Cannot use both distillation losses at the same time"
+    assert not (args.distil_mse and not args.qrels_path), "qrels_path is required for distillation loss with Margin MSE"
+    assert not ((args.distil_kl or args.distil_mse) and args.batch_size != 1), \
+        "Can process only one example per GPU at a time with distillation"
 
     # pass all argparse arguments to run() as kwargs
     run(**vars(args))
