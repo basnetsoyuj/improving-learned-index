@@ -9,7 +9,8 @@ from torch.utils.data.distributed import DistributedSampler
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCrossEncoder
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, \
     InBatchNegativesTrainer
-from src.utils.datasets import MSMarcoTriples, DistilHardNegatives
+from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLoss
+from src.utils.datasets import MSMarcoTriples, DistillationScores
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
@@ -43,16 +44,12 @@ def cross_encoder_collate_fn(batch):
 
 def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
     encoded_list, masks, scores = [], [], []
-    for query, positive_document, negative_document, positive_score, negative_score in batch:
-        encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
-        encoded_list.append(encoded_token)
-        masks.append(mask)
-        scores.append(positive_score)
-
-        encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
-        encoded_list.append(encoded_token)
-        masks.append(mask)
-        scores.append(negative_score)
+    for query, pid_score_list in batch:
+        for passage, score in pid_score_list:
+            encoded_token, mask = model_cls.process_query_and_document(query, passage, max_length=max_length)
+            encoded_list.append(encoded_token)
+            masks.append(mask)
+            scores.append(score)
 
     return {
         'encoded_list': encoded_list,
@@ -84,7 +81,7 @@ def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact, max_length=None):
 
 
 def run(
-        triples_path: Union[str, Path],
+        dataset_path: Union[str, Path],
         queries_path: Union[str, Path],
         collection_path: Union[str, Path],
         checkpoint_dir: Union[str, Path],
@@ -97,9 +94,11 @@ def run(
         gradient_accumulation_steps: int,
         pairwise: bool = False,
         cross_encoder: bool = False,
-        distil: bool = False,
+        distil_mse: bool = False,
+        distil_kl: bool = False,
         in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
+        qrels_path: Union[str, Path] = None,
 ):
     # DeepImpact
     model_cls = DeepImpact
@@ -120,17 +119,23 @@ def run(
         collate_function = cross_encoder_collate_fn
 
     # Use distillation loss
-    if distil:
+    if distil_mse:
         trainer_cls = DistilTrainer
+        trainer_cls.loss = DistilMarginMSE()
         collate_function = partial(distil_collate_fn, max_length=max_length)
-        dataset_cls = DistilHardNegatives
+        dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
+    elif distil_kl:
+        trainer_cls = DistilTrainer
+        trainer_cls.loss = DistilKLLoss()
+        collate_function = partial(distil_collate_fn, max_length=max_length)
+        dataset_cls = DistillationScores
 
     if in_batch_negatives:
         trainer_cls = InBatchNegativesTrainer
         collate_function = partial(in_batch_negatives_collate_fn, max_length=max_length)
 
     trainer_cls.ddp_setup()
-    dataset = dataset_cls(triples_path, queries_path, collection_path)
+    dataset = dataset_cls(dataset_path, queries_path, collection_path)
     train_dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -170,7 +175,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser("Distributed Training of DeepImpact on MS MARCO triples dataset")
-    parser.add_argument("--triples_path", type=Path, required=True, help="Path to the triples dataset")
+    parser.add_argument("--dataset_path", type=Path, required=True, help="Path to the training dataset")
     parser.add_argument("--queries_path", type=Path, required=True, help="Path to the queries dataset")
     parser.add_argument("--collection_path", type=Path, required=True, help="Path to the collection dataset")
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")
@@ -183,11 +188,20 @@ if __name__ == "__main__":
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps")
     parser.add_argument("--pairwise", action="store_true", help="Use pairwise training")
     parser.add_argument("--cross_encoder", action="store_true", help="Use cross encoder model")
-    parser.add_argument("--distil", action="store_true", help="Use distillation loss")
+    parser.add_argument("--distil_mse", action="store_true", help="Use distillation loss with Mean Squared Error")
+    parser.add_argument("--distil_kl", action="store_true", help="Use distillation loss with KL divergence loss")
     parser.add_argument("--in_batch_negatives", action="store_true", help="Use in-batch negatives")
     parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
 
+    # required for distillation loss with Margin MSE
+    parser.add_argument("--qrels_path", type=Path, default=None, help="Path to the qrels file")
+
     args = parser.parse_args()
+
+    assert not (args.distil_mse and args.distil_kl), "Cannot use both distillation losses at the same time"
+    assert not (args.distil_mse and not args.qrels_path), "qrels_path is required for distillation loss with Margin MSE"
+    assert not ((args.distil_kl or args.distil_mse) and args.batch_size != 1), \
+        "Can process only one example per GPU at a time with distillation"
 
     # pass all argparse arguments to run() as kwargs
     run(**vars(args))

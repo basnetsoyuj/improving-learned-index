@@ -14,7 +14,7 @@ module load cuda/11.6.2
 module load cudnn/8.6.0.163-cuda11
 cd $HOME/improving-learned-index
 torchrun --standalone --nproc_per_node=gpu -m src.deep_impact.train \
-  --triples_path /scratch/sjb8193/qidpidtriples.train.small.tsv \
+  --dataset_path /scratch/sjb8193/qidpidtriples.train.small.tsv \
   --queries_path /scratch/sjb8193/queries.train.tsv \
   --collection_path /scratch/sjb8193/expanded_collection.tsv \
   --checkpoint_dir /scratch/sjb8193/checkpoints \
