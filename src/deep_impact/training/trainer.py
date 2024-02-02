@@ -120,10 +120,12 @@ class Trainer:
 
     def get_output_scores(self, batch):
         input_ids, attention_mask, type_ids = self.get_input_tensors(batch['encoded_list'])
-        document_term_scores = self.model(input_ids, attention_mask, type_ids)
-
-        masks = batch['masks'].to(self.gpu_id)
-        return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
+        document_term_scores = self.model(input_ids, attention_mask, type_ids).squeeze(-1)
+        tokens_list = [[document_term_scores[i, indices] for indices in group] for i, group in
+                       enumerate(batch['masks'])]
+        return torch.stack([
+            torch.stack([group.max() for group in tokens]).sum() for tokens in tokens_list
+        ]).view(self.batch_size, -1)
 
     def evaluate_loss(self, outputs, batch):
         labels = torch.zeros(self.batch_size, dtype=torch.long).to(self.gpu_id)

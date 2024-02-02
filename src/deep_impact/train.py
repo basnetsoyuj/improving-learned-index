@@ -13,20 +13,20 @@ from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLos
 from src.utils.datasets import MSMarcoTriples, DistillationScores
 
 
-def collate_fn(batch, model_cls=DeepImpact, max_length=None):
+def collate_fn(batch, model_cls=DeepImpact):
     encoded_list, masks = [], []
     for query, positive_document, negative_document in batch:
-        encoded_token, mask = model_cls.process_query_and_document(query, positive_document, max_length=max_length)
+        encoded_token, mask = model_cls.process_query_and_document(query, positive_document)
         encoded_list.append(encoded_token)
         masks.append(mask)
 
-        encoded_token, mask = model_cls.process_query_and_document(query, negative_document, max_length=max_length)
+        encoded_token, mask = model_cls.process_query_and_document(query, negative_document)
         encoded_list.append(encoded_token)
         masks.append(mask)
 
     return {
         'encoded_list': encoded_list,
-        'masks': torch.stack(masks, dim=0).unsqueeze(-1),
+        'masks': masks,
     }
 
 
@@ -42,23 +42,23 @@ def cross_encoder_collate_fn(batch):
     return {'encoded_list': encoded_list}
 
 
-def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+def distil_collate_fn(batch, model_cls=DeepImpact):
     encoded_list, masks, scores = [], [], []
     for query, pid_score_list in batch:
         for passage, score in pid_score_list:
-            encoded_token, mask = model_cls.process_query_and_document(query, passage, max_length=max_length)
+            encoded_token, mask = model_cls.process_query_and_document(query, passage)
             encoded_list.append(encoded_token)
             masks.append(mask)
             scores.append(score)
 
     return {
         'encoded_list': encoded_list,
-        'masks': torch.stack(masks, dim=0).unsqueeze(-1),
+        'masks': masks,
         'scores': torch.tensor(scores, dtype=torch.float),
     }
 
 
-def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact):
     queries, positive_documents, negative_documents = zip(*batch)
     queries_terms = [model_cls.process_query(query) for query in queries]
     negatives = [model_cls.process_document(document) for document in negative_documents]
@@ -68,15 +68,15 @@ def in_batch_negatives_collate_fn(batch, model_cls=DeepImpact, max_length=None):
         encoded_token, term_to_token_index = model_cls.process_document(positive_document)
 
         encoded_list.append(encoded_token)
-        masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index, max_length))
+        masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index))
 
         encoded_list.append(negatives[i][0])
         for _, term_to_token_index in negatives:
-            masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index, max_length))
+            masks.append(model_cls.get_query_document_token_mask(query_terms, term_to_token_index))
 
     return {
         'encoded_list': encoded_list,
-        'masks': torch.stack(masks, dim=0),
+        'masks': masks,
     }
 
 
@@ -103,14 +103,14 @@ def run(
     # DeepImpact
     model_cls = DeepImpact
     trainer_cls = Trainer
-    collate_function = partial(collate_fn, model_cls=DeepImpact, max_length=max_length)
+    collate_function = partial(collate_fn, model_cls=DeepImpact)
     dataset_cls = MSMarcoTriples
 
     # Pairwise
     if pairwise:
         model_cls = DeepPairwiseImpact
         trainer_cls = PairwiseTrainer
-        collate_function = partial(collate_fn, model_cls=DeepPairwiseImpact, max_length=max_length)
+        collate_function = partial(collate_fn, model_cls=DeepPairwiseImpact)
 
     # CrossEncoder
     elif cross_encoder:
@@ -122,17 +122,17 @@ def run(
     if distil_mse:
         trainer_cls = DistilTrainer
         trainer_cls.loss = DistilMarginMSE()
-        collate_function = partial(distil_collate_fn, max_length=max_length)
+        collate_function = partial(distil_collate_fn)
         dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
     elif distil_kl:
         trainer_cls = DistilTrainer
         trainer_cls.loss = DistilKLLoss()
-        collate_function = partial(distil_collate_fn, max_length=max_length)
+        collate_function = partial(distil_collate_fn)
         dataset_cls = DistillationScores
 
     if in_batch_negatives:
         trainer_cls = InBatchNegativesTrainer
-        collate_function = partial(in_batch_negatives_collate_fn, max_length=max_length)
+        collate_function = partial(in_batch_negatives_collate_fn)
 
     trainer_cls.ddp_setup()
     dataset = dataset_cls(dataset_path, queries_path, collection_path)
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--queries_path", type=Path, required=True, help="Path to the queries dataset")
     parser.add_argument("--collection_path", type=Path, required=True, help="Path to the collection dataset")
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")
-    parser.add_argument("--max_length", type=int, default=300, help="Max Number of tokens in document")
+    parser.add_argument("--max_length", type=int, default=512, help="Max Number of tokens in document")
     parser.add_argument("--seed", type=int, default=42, help="Fix seed")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument("--lr", type=float, default=3e-6, help="Learning rate")
