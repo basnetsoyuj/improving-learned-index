@@ -124,8 +124,7 @@ class Trainer:
         tokens_list = [[document_term_scores[i, indices] for indices in group] for i, group in
                        enumerate(batch['masks'])]
         return torch.stack([
-            torch.stack([group.max() for group in tokens]).sum() if tokens else torch.tensor(0).to(self.gpu_id)
-            for tokens in tokens_list
+            torch.stack([group.max() for group in tokens]).sum() for tokens in tokens_list
         ]).view(self.batch_size, -1)
 
     def evaluate_loss(self, outputs, batch):

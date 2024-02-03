@@ -47,6 +47,8 @@ def distil_collate_fn(batch, model_cls=DeepImpact):
     for query, pid_score_list in batch:
         for passage, score in pid_score_list:
             encoded_token, mask = model_cls.process_query_and_document(query, passage)
+            if not mask:
+                continue
             encoded_list.append(encoded_token)
             masks.append(mask)
             scores.append(score)
