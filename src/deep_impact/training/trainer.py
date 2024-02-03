@@ -84,6 +84,9 @@ class Trainer:
             train_loss = 0
 
             for i, batch in enumerate(self.train_data):
+                if not batch['encoded_list']:
+                    continue
+
                 with torch.cuda.amp.autocast():
                     outputs = self.get_output_scores(batch)
                     loss = self.evaluate_loss(outputs, batch)

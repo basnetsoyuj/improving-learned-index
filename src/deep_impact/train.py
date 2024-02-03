@@ -181,7 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("--queries_path", type=Path, required=True, help="Path to the queries dataset")
     parser.add_argument("--collection_path", type=Path, required=True, help="Path to the collection dataset")
     parser.add_argument("--checkpoint_dir", type=Path, required=True, help="Directory to store and load checkpoints")
-    parser.add_argument("--max_length", type=int, default=512, help="Max Number of tokens in document")
+    parser.add_argument("--max_length", type=int, default=300, help="Max Number of tokens in document")
     parser.add_argument("--seed", type=int, default=42, help="Fix seed")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument("--lr", type=float, default=3e-6, help="Learning rate")
