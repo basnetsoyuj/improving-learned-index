@@ -70,7 +70,7 @@ class ReRanker:
             batch_pids.append(pid)
 
             if len(batch) == self.batch_size or (i == len(pids) - 1 and batch):
-                batch_encoded, batch_term_to_token_index_map = zip(
+                batch_encoded, batch_term_to_token_indices_map = zip(
                     *list(self.pool.map(DeepImpact.process_document, batch))
                 )
                 input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long)
@@ -78,7 +78,7 @@ class ReRanker:
                 type_ids = torch.tensor([x.type_ids for x in batch_encoded], dtype=torch.long)
 
                 batch_term_impacts = DeepImpact.compute_term_impacts(
-                    documents_term_to_token_index_map=batch_term_to_token_index_map,
+                    documents_term_to_token_indices_map=batch_term_to_token_indices_map,
                     outputs=self.model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=type_ids)
                 )
 

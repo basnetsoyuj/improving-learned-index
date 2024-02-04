@@ -99,7 +99,7 @@ class DeepImpact(BertPreTrainedModel):
         """
         Encodes the document and maps each unique term (non-punctuation) to its corresponding first token's index.
         :param document: Document string
-        :return: Tuple: Encoded document, Dict mapping unique non-punctuation document terms to first token index
+        :return: Tuple: Encoded document, Dict mapping unique non-punctuation document terms to token indices
         """
 
         document = cls.tokenizer.normalizer.normalize_str(document)
