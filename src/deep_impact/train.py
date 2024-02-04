@@ -10,7 +10,7 @@ from src.deep_impact.models import DeepImpact, DeepPairwiseImpact, DeepImpactCro
 from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrainer, DistilTrainer, \
     InBatchNegativesTrainer
 from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLoss
-from src.utils.datasets import MSMarcoTriples, DistillationScores
+from src.utils.datasets import MSMarcoTriples, DistillationScores, DistilHardNegatives
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
@@ -42,7 +42,7 @@ def cross_encoder_collate_fn(batch):
     return {'encoded_list': encoded_list}
 
 
-def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+def kl_div_distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
     encoded_list, masks, scores = [], [], []
     for query, pid_score_list in batch:
         for passage, score in pid_score_list:
@@ -50,6 +50,26 @@ def distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
             encoded_list.append(encoded_token)
             masks.append(mask)
             scores.append(score)
+
+    return {
+        'encoded_list': encoded_list,
+        'masks': torch.stack(masks, dim=0).unsqueeze(-1),
+        'scores': torch.tensor(scores, dtype=torch.float),
+    }
+
+
+def margin_mse_distil_collate_fn(batch, model_cls=DeepImpact, max_length=None):
+    encoded_list, masks, scores = [], [], []
+    for query, pos_doc, neg_doc, pos_score, neg_score in batch:
+        encoded_token, mask = model_cls.process_query_and_document(query, pos_doc, max_length=max_length)
+        encoded_list.append(encoded_token)
+        masks.append(mask)
+        scores.append(pos_score)
+
+        encoded_token, mask = model_cls.process_query_and_document(query, neg_doc, max_length=max_length)
+        encoded_list.append(encoded_token)
+        masks.append(mask)
+        scores.append(neg_score)
 
     return {
         'encoded_list': encoded_list,
@@ -98,7 +118,6 @@ def run(
         distil_kl: bool = False,
         in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
-        qrels_path: Union[str, Path] = None,
 ):
     # DeepImpact
     model_cls = DeepImpact
@@ -122,12 +141,12 @@ def run(
     if distil_mse:
         trainer_cls = DistilTrainer
         trainer_cls.loss = DistilMarginMSE()
-        collate_function = partial(distil_collate_fn, max_length=max_length)
-        dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
+        collate_function = partial(margin_mse_distil_collate_fn, max_length=max_length)
+        dataset_cls = DistilHardNegatives
     elif distil_kl:
         trainer_cls = DistilTrainer
         trainer_cls.loss = DistilKLLoss()
-        collate_function = partial(distil_collate_fn, max_length=max_length)
+        collate_function = partial(kl_div_distil_collate_fn, max_length=max_length)
         dataset_cls = DistillationScores
 
     if in_batch_negatives:
@@ -199,9 +218,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     assert not (args.distil_mse and args.distil_kl), "Cannot use both distillation losses at the same time"
-    assert not (args.distil_mse and not args.qrels_path), "qrels_path is required for distillation loss with Margin MSE"
-    assert not ((args.distil_kl or args.distil_mse) and args.batch_size != 1), \
-        "Can process only one example per GPU at a time with distillation"
+    assert not (args.distil_kl and args.batch_size != 1), "Can process only 1 example per GPU at a time with KLDiv loss"
 
     # pass all argparse arguments to run() as kwargs
     run(**vars(args))

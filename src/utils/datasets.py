@@ -230,34 +230,19 @@ class DistilHardNegatives(MSMarcoTriples):
 
 class DistillationScores:
     def __init__(self, scores_path: Union[str, Path], queries_path: Union[str, Path],
-                 collection_path: Union[str, Path], batch_size: int = 150,
-                 qrels_path: Optional[Union[str, Path]] = None):
+                 collection_path: Union[str, Path], batch_size: int = 150):
         self.batch_size = batch_size
-        self.qrels = qrels_path and QueryRelevanceDataset(qrels_path)
         self.queries = Queries(queries_path)
         self.collection = Collection(collection_path)
         self.dataset = self.construct_dataset(self._load_scores(scores_path))
 
     def construct_dataset(self, scores):
-        # Margin MSE distillation loss
-        if self.qrels:
-            lookup = []
-            for qid in self.qrels.keys():
-                positive_docs = [(x, scores[qid].pop(x)) for x in self.qrels[qid]]
-                negative_docs = list(scores[qid].items())
-
-                for pos_doc in positive_docs:
-                    for i in range(0, len(negative_docs), self.batch_size):
-                        lookup.append((qid, [pos_doc] + negative_docs[i:i + self.batch_size]))
-            return lookup
-        # KL divergence distillation loss
-        else:
-            lookup = []
-            for qid in scores:
-                docs = list(scores[qid].items())
-                for i in range(0, len(docs), self.batch_size):
-                    lookup.append((qid, docs[i:i + self.batch_size]))
-            return lookup
+        lookup = []
+        for qid in scores:
+            docs = list(scores[qid].items())
+            for i in range(0, len(docs), self.batch_size):
+                lookup.append((qid, docs[i:i + self.batch_size]))
+        return lookup
 
     @staticmethod
     def _load_scores(path):
