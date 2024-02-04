@@ -291,3 +291,23 @@ class RunFile:
             for line in f:
                 qid, pid, rank, score = line.strip().split('\t')
                 yield int(qid), int(pid), int(rank), float(score)
+
+
+class TopKRunFile(RunFile):
+    def __init__(self, run_file_path: Union[str, Path]):
+        super().__init__(run_file_path)
+
+        top_k = {}
+        for qid, pid, _, _ in self.read():
+            top_k.setdefault(qid, []).append(pid)
+        self.top_k = top_k
+
+    def __len__(self):
+        return len(self.top_k)
+
+    def __getitem__(self, qid):
+        return self.top_k[qid]
+
+    def __iter__(self):
+        for qid in self.top_k:
+            yield qid, self.top_k[qid]
