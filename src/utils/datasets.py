@@ -294,12 +294,15 @@ class RunFile:
 
 
 class TopKRunFile(RunFile):
-    def __init__(self, run_file_path: Union[str, Path]):
+    def __init__(self, run_file_path: Union[str, Path], k: int = 2000):
         super().__init__(run_file_path)
 
         top_k = {}
-        for qid, pid, _, _ in self.read():
-            top_k.setdefault(qid, []).append(pid)
+        for qid, pid, rank, _ in self.read():
+            top_k.setdefault(qid, []).append((rank, pid))
+        for qid in top_k:
+            top_k[qid].sort()
+            top_k[qid] = [v for _, v in top_k[qid][:k]]
         self.top_k = top_k
 
     def __len__(self):
