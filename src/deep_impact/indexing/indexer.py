@@ -28,13 +28,13 @@ class Indexer:
 
     @torch.no_grad()
     def index(self, batch, file):
-        every_encoded_and_term_to_token_index_map = list(self.pool.map(self.model_cls.process_document, batch))
+        every_encoded_and_term_to_token_indices_map = list(self.pool.map(self.model_cls.process_document, batch))
         every_term_impacts = []
 
         for batch_idx in range(ceil(len(batch) / self.batch_size)):
             start = batch_idx * self.batch_size
             end = start + self.batch_size
-            batch_encoded, batch_term_to_token_index_map = zip(*every_encoded_and_term_to_token_index_map[start:end])
+            batch_encoded, batch_term_to_token_indices_map = zip(*every_encoded_and_term_to_token_indices_map[start:end])
 
             input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long)
             attention_mask = torch.tensor([x.attention_mask for x in batch_encoded], dtype=torch.long)
@@ -53,7 +53,7 @@ class Indexer:
             # ---------------------------------------------------
 
             every_term_impacts.extend(self.model_cls.compute_term_impacts(
-                documents_term_to_token_index_map=batch_term_to_token_index_map,
+                documents_term_to_token_indices_map=batch_term_to_token_indices_map,
                 outputs=outputs,
             ))
 
