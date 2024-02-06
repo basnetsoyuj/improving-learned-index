@@ -40,6 +40,9 @@ class Queries:
         for qid in self.queries:
             yield qid, self.queries[qid]
 
+    def keys(self):
+        return self.queries.keys()
+
 
 class Collection:
     """
