@@ -49,6 +49,10 @@ class DistilTrainer(Trainer):
     loss = DistilKLLoss()
 
     def evaluate_loss(self, outputs, batch):
+        # cross-entropy loss
+        cross_entropy_loss = super().evaluate_loss(outputs, batch)
+
         # distillation loss
         teacher_scores = batch['scores'].view(self.batch_size, -1).to(self.gpu_id)
-        return self.loss(outputs, teacher_scores)
+
+        return cross_entropy_loss + self.loss(outputs, teacher_scores)

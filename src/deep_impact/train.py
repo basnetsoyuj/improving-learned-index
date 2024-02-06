@@ -128,7 +128,7 @@ def run(
         trainer_cls = DistilTrainer
         trainer_cls.loss = DistilKLLoss()
         collate_function = partial(distil_collate_fn, max_length=max_length)
-        dataset_cls = DistillationScores
+        dataset_cls = partial(DistillationScores, qrels_path=qrels_path)
 
     if in_batch_negatives:
         trainer_cls = InBatchNegativesTrainer

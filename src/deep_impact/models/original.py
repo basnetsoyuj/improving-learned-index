@@ -20,6 +20,9 @@ class DeepImpact(BertPreTrainedModel):
         super(DeepImpact, self).__init__(config)
         self.bert = BertModel(config)
         self.impact_score_encoder = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
             nn.Linear(config.hidden_size, 1),
             nn.ReLU()
         )
