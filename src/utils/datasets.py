@@ -233,7 +233,7 @@ class DistilHardNegatives(MSMarcoTriples):
 
 class DistillationScores:
     def __init__(self, scores_path: Union[str, Path], queries_path: Union[str, Path],
-                 collection_path: Union[str, Path], batch_size: int = 150,
+                 collection_path: Union[str, Path], batch_size: int = 55,
                  qrels_path: Optional[Union[str, Path]] = None):
         self.batch_size = batch_size
         self.qrels = qrels_path and QueryRelevanceDataset(qrels_path)

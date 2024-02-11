@@ -20,6 +20,8 @@ class DeepImpactCollection:
 
     def __getitem__(self, pid):
         string = self.document_encodings[pid]
+        if not string.strip():
+            return {}
         return {term: float(impact_score) for term, impact_score in (pair.split(': ') for pair in string.split(', '))}
 
     def score(self, pid, query_terms: Set[str]):

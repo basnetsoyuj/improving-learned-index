@@ -200,8 +200,6 @@ if __name__ == "__main__":
 
     assert not (args.distil_mse and args.distil_kl), "Cannot use both distillation losses at the same time"
     assert not (args.distil_mse and not args.qrels_path), "qrels_path is required for distillation loss with Margin MSE"
-    assert not ((args.distil_kl or args.distil_mse) and args.batch_size != 1), \
-        "Can process only one example per GPU at a time with distillation"
 
     # pass all argparse arguments to run() as kwargs
     run(**vars(args))
