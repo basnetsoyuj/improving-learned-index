@@ -137,12 +137,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    generator = LLamaQueryGenerator(llama_path=args.llama_path, max_tokens=args.max_tokens)
+    generator = LLamaQueryGenerator(llama_path=args.llama_path, max_tokens=args.max_tokens, peft_path=args.peft_path)
 
     batch = []
     ids = []
 
-    with open(args.collection, 'r') as f:
+    with open(args.collection_path, 'r') as f:
         for line in tqdm(f):
             doc_id, doc = CollectionParser.parse(line, args.collection_type)
             batch.append(doc)

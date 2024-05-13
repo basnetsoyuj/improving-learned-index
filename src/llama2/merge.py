@@ -9,10 +9,11 @@ from src.utils.defaults import COLLECTION_TYPES
 from src.utils.utils import get_unique_query_terms
 
 
-def merge(collection: Path, collection_type: str, queries: Path, output: Path):
-    with open(collection) as f, open(queries) as q, open(output, 'w') as out:
+def merge(collection_path: Path, collection_type: str, queries_path: Path, output: Path):
+    with open(collection_path) as f, open(queries_path) as q, open(output, 'w') as out:
         for line, query_list in tqdm(zip(f, q)):
             doc_id, doc = CollectionParser.parse(line, collection_type)
+            doc = doc.replace('\n', ' ')
             query_list = json.loads(query_list)
 
             assert doc_id == query_list['doc_id'], f"Doc id mismatch: {doc_id} != {query_list['doc_id']}"
@@ -28,3 +29,5 @@ if __name__ == '__main__':
     parser.add_argument('--queries_path', type=Path)
     parser.add_argument('--output_path', type=Path)
     args = parser.parse_args()
+
+    merge(args.collection_path, args.collection_type, args.queries_path, args.output_path)
