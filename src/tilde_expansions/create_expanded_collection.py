@@ -1,12 +1,15 @@
 import argparse
-from src.deep_impact.models.original import DeepImpact
+
 from datasets import load_dataset
 from tqdm import tqdm
+
+from src.deep_impact.models.original import DeepImpact
+
 
 def create_collection(original_collection_path, output_collection_path):
     with open(original_collection_path, 'r', encoding='utf-8') as f:
         original_collection = [line.strip().split('\t') for line in f]
-    
+
     expansions = load_dataset("pxyu/MSMARCO-TILDE-Top200-CSV300k")['train']
     already_present = 0
 

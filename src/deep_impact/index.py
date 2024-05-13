@@ -4,12 +4,14 @@ from typing import Union
 
 from src.deep_impact.indexing import Indexer
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
-from src.utils.defaults import COLLECTION_PATH, DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE
+from src.utils.datasets import CollectionParser
+from src.utils.defaults import COLLECTION_PATH, DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, COLLECTION_TYPES
 from src.utils.logger import Logger
 
 
 def run(
         collection_path: Union[str, Path],
+        collection_type: str,
         output_file_path: Union[str, Path],
         model_checkpoint_path: Union[str, Path],
         num_processes: int,
@@ -34,7 +36,8 @@ def run(
                 indexer.index(batch, out)
                 logger.info(f'Indexed {i} passages [Rate: {i / (time.time() - start):.2f} passages/s]')
                 batch = []
-            doc_id, passage = passage.strip().split('\t')
+
+            doc_id, passage = CollectionParser.parse(passage, collection_type)
             batch.append(passage)
 
         # finish remaining last items
@@ -47,6 +50,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Create a DeepImpact index by computing impacts of all document terms.")
     parser.add_argument("--collection_path", type=Path, default=COLLECTION_PATH,
                         help="Path to the collection dataset")
+    parser.add_argument("--collection_type", type=str, default='msmarco', choices=COLLECTION_TYPES,
+                        help="Collection dataset type")
     parser.add_argument("--output_file_path", type=Path, default=DATA_DIR / 'collection.index',
                         help="Path to the output file")
     parser.add_argument("--model_checkpoint_path", type=Path, default=CHECKPOINT_DIR / 'DeepImpact_latest.pt',

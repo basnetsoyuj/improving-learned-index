@@ -1,4 +1,3 @@
-import re
 import subprocess
 from itertools import compress
 from pathlib import Path
@@ -9,6 +8,7 @@ from pyterrier_doc2query import Doc2QueryStore, QueryScoreStore
 from tqdm import tqdm
 
 from src.utils.logger import Logger
+from src.utils.utils import get_unique_query_terms
 
 if not pt.started():
     pt.init()
@@ -18,10 +18,6 @@ def load_passages(path):
     with open(path, 'r') as f:
         passages = f.readlines()
     return passages
-
-
-def get_term_set(text):
-    return set(re.sub(r'[^\w\s]', ' ', text).lower().split())
 
 
 def construct_collection(
@@ -60,10 +56,8 @@ def construct_collection(
             logger.info(f"{doc_id} | FILTERED QUERIES: {len(queries)}")
         # append only unique terms (injected terms not in passage)
         else:
-            terms = get_term_set(passage)
-            query_terms = get_term_set(' '.join(queries))
-            unique_terms = query_terms.difference(terms)
-            queries_str = ' '.join(list(unique_terms))
+            unique_terms = get_unique_query_terms(queries, passage)
+            queries_str = ' '.join(unique_terms)
             logger.info(f"{doc_id} | FILTERED QUERIES: {len(queries)} | UNIQUE TERMS ADDED: {len(unique_terms)}")
 
         with open(output_path, 'a') as f:

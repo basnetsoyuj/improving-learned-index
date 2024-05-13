@@ -1,4 +1,5 @@
 import gzip
+import json
 import pickle
 from pathlib import Path
 from typing import Optional
@@ -317,3 +318,23 @@ class TopKRunFile(RunFile):
     def __iter__(self):
         for qid in self.top_k:
             yield qid, self.top_k[qid]
+
+
+class CollectionParser:
+    _mapping = {
+        'msmarco': 'get_msmarco_item',
+        'beir': 'get_beir_item'
+    }
+
+    @staticmethod
+    def get_msmarco_item(passage):
+        return passage.strip().split('\t')
+
+    @staticmethod
+    def get_beir_item(passage):
+        item = json.loads(passage)
+        return item['_id'], item['title'] + ' ' + item['text']
+
+    @staticmethod
+    def parse(item, collection_type):
+        return getattr(CollectionParser, CollectionParser._mapping[collection_type])(item)
