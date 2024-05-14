@@ -8,6 +8,7 @@ from typing import Union, Set
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from src.utils.defaults import COLLECTION_TYPES
 from src.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -19,16 +20,16 @@ class Queries:
     :param queries_path: Path to the queries dataset. Each line is a query of (qid, query)
     """
 
-    def __init__(self, queries_path: Union[str, Path]):
+    def __init__(self, queries_path: Union[str, Path], dataset_type: Optional[str] = COLLECTION_TYPES[0]):
+        self.dataset_type = dataset_type
         self.queries = self._load_queries(queries_path)
 
-    @staticmethod
-    def _load_queries(path):
+    def _load_queries(self, path):
         queries = {}
         with open(path, encoding='utf-8') as f:
             for line in f:
-                qid, query = line.strip().split('\t')
-                queries[int(qid)] = query
+                qid, query = QueryParser.parse(line, self.dataset_type)
+                queries[qid] = query
         return queries
 
     def __len__(self):
@@ -338,3 +339,24 @@ class CollectionParser:
     @staticmethod
     def parse(item, collection_type):
         return getattr(CollectionParser, CollectionParser._mapping[collection_type])(item)
+
+
+class QueryParser:
+    _mapping = {
+        'msmarco': 'get_msmarco_item',
+        'beir': 'get_beir_item'
+    }
+
+    @staticmethod
+    def get_msmarco_item(query):
+        qid, query = query.strip().split('\t')
+        return int(qid), query
+
+    @staticmethod
+    def get_beir_item(query):
+        item = json.loads(query)
+        return item['_id'], item['text']
+
+    @staticmethod
+    def parse(item, collection_type):
+        return getattr(QueryParser, QueryParser._mapping[collection_type])(item)

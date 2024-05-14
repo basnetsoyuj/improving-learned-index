@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 
 from tqdm import tqdm
@@ -13,13 +14,15 @@ def merge(collection_path: Path, collection_type: str, queries_path: Path, outpu
     with open(collection_path) as f, open(queries_path) as q, open(output, 'w') as out:
         for line, query_list in tqdm(zip(f, q)):
             doc_id, doc = CollectionParser.parse(line, collection_type)
-            doc = doc.replace('\n', ' ')
             query_list = json.loads(query_list)
 
             assert doc_id == query_list['doc_id'], f"Doc id mismatch: {doc_id} != {query_list['doc_id']}"
 
+            doc = doc.replace('\n', ' ')
             unique_query_terms_str = ' '.join(get_unique_query_terms(query_list['queries'], doc))
-            out.write(f'{doc_id}\t{doc} {unique_query_terms_str}\n')
+
+            doc = re.sub(r"\s{2,}", ' ', f'{doc} {unique_query_terms_str}')
+            out.write(f'{doc_id}\t{doc}\n')
 
 
 if __name__ == '__main__':

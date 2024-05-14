@@ -8,6 +8,7 @@ from tqdm.auto import tqdm
 from src.deep_impact.inverted_index import InvertedIndex
 from src.deep_impact.models import DeepImpact, DeepPairwiseImpact
 from src.utils.datasets import QueryRelevanceDataset, Queries, RunFile
+from src.utils.defaults import COLLECTION_TYPES
 
 
 def rank(args):
@@ -24,8 +25,9 @@ class Ranker:
             num_workers: int = 4,
             qrels_path: Optional[Union[str, Path]] = None,
             pairwise: bool = False,
+            dataset_type: Optional[str] = COLLECTION_TYPES[0],
     ):
-        self.queries = Queries(queries_path=queries_path)
+        self.queries = Queries(queries_path=queries_path, dataset_type=dataset_type)
         self.query_iterator = self.queries.keys()
 
         # evaluate only the queries in the qrels file
