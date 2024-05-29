@@ -19,8 +19,8 @@ class DeepImpactCrossEncoder(DeepImpact):
         :param token_type_ids: Batch of token type ids
         :return: Batch of impact scores
         """
-        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids)
-        return self.get_impact_scores(bert_output.last_hidden_state[:, 0, :])
+        bert_output = self._get_bert_output(input_ids, attention_mask, token_type_ids)
+        return self._get_term_impact_scores(bert_output.last_hidden_state[:, 0, :])
 
     @classmethod
     def process_cross_encoder_document_and_query(

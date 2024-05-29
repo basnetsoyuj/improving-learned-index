@@ -37,10 +37,10 @@ class DeepImpact(BertPreTrainedModel):
         :param token_type_ids: Batch of token type ids
         :return: Batch of impact scores
         """
-        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids)
-        return self.get_impact_scores(bert_output.last_hidden_state)
+        bert_output = self._get_bert_output(input_ids, attention_mask, token_type_ids)
+        return self._get_term_impact_scores(bert_output.last_hidden_state)
 
-    def get_bert_output(
+    def _get_bert_output(
             self,
             input_ids: torch.Tensor,
             attention_mask: torch.Tensor,
@@ -61,7 +61,7 @@ class DeepImpact(BertPreTrainedModel):
             output_attentions=output_attentions
         )
 
-    def get_impact_scores(
+    def _get_term_impact_scores(
             self,
             last_hidden_state: torch.Tensor,
     ) -> torch.Tensor:
@@ -73,7 +73,7 @@ class DeepImpact(BertPreTrainedModel):
 
     @classmethod
     def process_query_and_document(cls, query: str, document: str, max_length: Optional[int] = None) -> \
-            (torch.Tensor, torch.Tensor):
+            Tuple[torch.Tensor, torch.Tensor]:
         """
         Process query and document to feed to the model
         :param query: Query string
@@ -138,7 +138,7 @@ class DeepImpact(BertPreTrainedModel):
 
     @classmethod
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
-        model = cls.from_pretrained('bert-base-uncased')
+        model = cls.from_pretrained('Luyu/co-condenser-marco')
         if checkpoint_path is not None:
             ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
         cls.tokenizer.enable_truncation(max_length=cls.max_length, strategy='longest_first')
@@ -166,3 +166,19 @@ class DeepImpact(BertPreTrainedModel):
             ])
 
         return term_impacts
+
+    def get_impact_scores(self, document: str) -> List[Tuple[str, float]]:
+        """
+        Get impact scores for each term in the document
+        :param document: Document string
+        :return: List of tuples of document terms and their impact scores
+        """
+        encoded, term_to_token_index = self.process_document(document)
+        input_ids = torch.tensor([encoded.ids], dtype=torch.long).to(self.device)
+        attention_mask = torch.tensor([encoded.attention_mask], dtype=torch.long).to(self.device)
+        token_type_ids = torch.tensor([encoded.type_ids], dtype=torch.long).to(self.device)
+
+        with torch.no_grad():
+            outputs = self(input_ids, attention_mask, token_type_ids)
+
+        return self.compute_term_impacts([term_to_token_index], outputs)[0]

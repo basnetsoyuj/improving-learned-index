@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import List, Optional
 
 import torch
 from peft import PeftModel, PeftConfig
@@ -11,7 +11,6 @@ from transformers import LlamaForCausalLM, LlamaTokenizer, BitsAndBytesConfig, T
 from src.utils.datasets import CollectionParser
 from src.utils.defaults import (
     DEVICE,
-    DATA_DIR,
     COLLECTION_TYPES,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_NEW_TOKENS,
@@ -26,9 +25,9 @@ from src.utils.defaults import (
 # DEVICE = xm.xla_device()
 
 class LLamaQueryGenerator:
-    def __init__(self, llama_path: Union[str, Path], max_tokens, peft_path: Optional[Union[str, Path]] = None):
+    def __init__(self, llama_path: str, max_tokens, peft_path: Optional[str] = None):
+        self.llama_path = llama_path
         self.max_tokens = max_tokens
-        self.llama_path = Path(llama_path)
         self.tokenizer = LlamaTokenizer.from_pretrained(self.llama_path)
         self.tokenizer.pad_token_id = 0  # making it different from the eos token
         self.tokenizer.padding_side = 'left'
@@ -46,7 +45,6 @@ class LLamaQueryGenerator:
         )
 
         if peft_path is not None:
-            peft_path = str(peft_path)
             self.peft_config = PeftConfig.from_pretrained(peft_path)
             self.model = PeftModel.from_pretrained(self.model, peft_path)
 
@@ -123,7 +121,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Generate queries from a trained model.')
-    parser.add_argument('--llama_path', type=Path, default=DATA_DIR / 'doc2query-llama-2-7b-merged')
+
+    # If Peft weights are not merged, pass peft path
+    parser.add_argument('--llama_path', type=str, default='./doc2query-llama-2-7b-merged')
     parser.add_argument('--collection_path', type=Path)
     parser.add_argument('--collection_type', type=str, choices=COLLECTION_TYPES)
     parser.add_argument('--output_path', type=Path)
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_tokens', type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument('--top_k', type=int, default=DEFAULT_TOP_K)
     parser.add_argument('--top_p', type=float, default=DEFAULT_TOP_P)
-    parser.add_argument('--peft_path', type=Path, default=None)
+    parser.add_argument('--peft_path', type=str, default=None)
 
     args = parser.parse_args()
 

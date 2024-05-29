@@ -1,16 +1,15 @@
 import argparse
 import json
-import re
 from pathlib import Path
 
 from tqdm import tqdm
 
 from src.utils.datasets import CollectionParser
 from src.utils.defaults import COLLECTION_TYPES
-from src.utils.utils import get_unique_query_terms
+from src.utils.utils import merge
 
 
-def merge(collection_path: Path, collection_type: str, queries_path: Path, output: Path):
+def merge_collection_and_expansions(collection_path: Path, collection_type: str, queries_path: Path, output: Path):
     with open(collection_path) as f, open(queries_path) as q, open(output, 'w') as out:
         for line, query_list in tqdm(zip(f, q)):
             doc_id, doc = CollectionParser.parse(line, collection_type)
@@ -18,10 +17,7 @@ def merge(collection_path: Path, collection_type: str, queries_path: Path, outpu
 
             assert doc_id == query_list['doc_id'], f"Doc id mismatch: {doc_id} != {query_list['doc_id']}"
 
-            doc = doc.replace('\n', ' ')
-            unique_query_terms_str = ' '.join(get_unique_query_terms(query_list['queries'], doc))
-
-            doc = re.sub(r"\s{2,}", ' ', f'{doc} {unique_query_terms_str}')
+            doc = merge(doc, query_list['query'])
             out.write(f'{doc_id}\t{doc}\n')
 
 
@@ -33,4 +29,4 @@ if __name__ == '__main__':
     parser.add_argument('--output_path', type=Path)
     args = parser.parse_args()
 
-    merge(args.collection_path, args.collection_type, args.queries_path, args.output_path)
+    merge_collection_and_expansions(args.collection_path, args.collection_type, args.queries_path, args.output_path)

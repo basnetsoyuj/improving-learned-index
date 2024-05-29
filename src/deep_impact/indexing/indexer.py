@@ -6,6 +6,8 @@ from typing import Union
 import torch
 from torch.nn import DataParallel
 
+from src.utils.defaults import DEVICE
+
 
 class Indexer:
     def __init__(
@@ -36,9 +38,9 @@ class Indexer:
             end = start + self.batch_size
             batch_encoded, batch_term_to_token_index_map = zip(*every_encoded_and_term_to_token_index_map[start:end])
 
-            input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long)
-            attention_mask = torch.tensor([x.attention_mask for x in batch_encoded], dtype=torch.long)
-            type_ids = torch.tensor([x.type_ids for x in batch_encoded], dtype=torch.long)
+            input_ids = torch.tensor([x.ids for x in batch_encoded], dtype=torch.long).to(DEVICE)
+            attention_mask = torch.tensor([x.attention_mask for x in batch_encoded], dtype=torch.long).to(DEVICE)
+            type_ids = torch.tensor([x.type_ids for x in batch_encoded], dtype=torch.long).to(DEVICE)
 
             # ------------------ DeepImpact ------------------
             outputs = self.model(input_ids, attention_mask, type_ids)

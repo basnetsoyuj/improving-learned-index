@@ -32,8 +32,8 @@ class DeepPairwiseImpact(DeepImpact):
         :return: Batch of impact scores and pairwise impact scores
         """
 
-        bert_output = self.get_bert_output(input_ids, attention_mask, token_type_ids, output_attentions=True)
-        single_impact_scores = self.get_impact_scores(bert_output.last_hidden_state)
+        bert_output = self._get_bert_output(input_ids, attention_mask, token_type_ids, output_attentions=True)
+        single_impact_scores = self._get_term_impact_scores(bert_output.last_hidden_state)
         pairwise_impact_scores, pairwise_attentions = self.get_pairwise_impact_scores(
             bert_output.last_hidden_state,
             bert_output.attentions,
