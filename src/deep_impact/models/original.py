@@ -1,3 +1,4 @@
+import os
 import string
 from pathlib import Path
 from typing import Optional, Union, List, Dict, Tuple, Set
@@ -140,7 +141,10 @@ class DeepImpact(BertPreTrainedModel):
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
         model = cls.from_pretrained('Luyu/co-condenser-marco')
         if checkpoint_path is not None:
-            ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
+            if os.path.exists(checkpoint_path):
+                ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
+            else:
+                model = cls.from_pretrained(checkpoint_path)
         cls.tokenizer.enable_truncation(max_length=cls.max_length, strategy='longest_first')
         cls.tokenizer.enable_padding(length=cls.max_length)
         return model

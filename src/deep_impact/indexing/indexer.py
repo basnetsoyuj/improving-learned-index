@@ -13,7 +13,7 @@ class Indexer:
     def __init__(
             self,
             model_cls: torch.nn.Module,
-            model_checkpoint_path: Union[str, Path],
+            model_checkpoint_path: str,
             num_processes: int,
             model_batch_size: int,
     ):

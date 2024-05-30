@@ -13,7 +13,7 @@ def run(
         collection_path: Union[str, Path],
         collection_type: str,
         output_file_path: Union[str, Path],
-        model_checkpoint_path: Union[str, Path],
+        model_checkpoint_path: str,
         num_processes: int,
         process_batch_size: int,
         model_batch_size: int,
@@ -54,8 +54,8 @@ if __name__ == "__main__":
                         help="Collection dataset type")
     parser.add_argument("--output_file_path", type=Path, default=DATA_DIR / 'collection.index',
                         help="Path to the output file")
-    parser.add_argument("--model_checkpoint_path", type=Path, default=CHECKPOINT_DIR / 'DeepImpact_latest.pt',
-                        help="Path to the model checkpoint")
+    parser.add_argument("--model_checkpoint_path", type=str, default=str(CHECKPOINT_DIR / 'DeepImpact_latest.pt'),
+                        help="Path to the model checkpoint or HuggingFace Hub link")
     parser.add_argument("--num_processes", type=int, default=8, help="Number of processes to use")
     parser.add_argument("--process_batch_size", type=int, default=50 * BATCH_SIZE,
                         help="Batch size for the process pool")
