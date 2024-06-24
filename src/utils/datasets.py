@@ -253,7 +253,10 @@ class DistillationScores:
 
                 for pos_doc in positive_docs:
                     for i in range(0, len(negative_docs), self.batch_size):
-                        lookup.append((qid, [pos_doc] + negative_docs[i:i + self.batch_size]))
+                        if i + self.batch_size <= len(negative_docs):
+                            lookup.append((qid, [pos_doc] + negative_docs[i:i + self.batch_size]))
+                        else:
+                            break
             return lookup
         # KL divergence distillation loss
         else:
@@ -261,7 +264,10 @@ class DistillationScores:
             for qid in scores:
                 docs = list(scores[qid].items())
                 for i in range(0, len(docs), self.batch_size):
-                    lookup.append((qid, docs[i:i + self.batch_size]))
+                    if i + self.batch_size <= len(docs):
+                        lookup.append((qid, docs[i:i + self.batch_size]))
+                    else:
+                        break
             return lookup
 
     @staticmethod
