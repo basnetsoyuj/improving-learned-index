@@ -127,7 +127,7 @@ environment variable.
 To quantize the generated impact scores, use the following command:
 
 ```bash
-python -m src.deep_impact.quantize \
+python -m src.deep_impact.indexing.quantize \
   -i <deep_impact_collection_path> \
   -o <quantized_deep_impact_collection_path>
 ```
@@ -154,6 +154,9 @@ processed with PISA.
 >   --output_path <run_file_path> \
 >   --dataset_type [msmarco | beir] \
 >   --num_workers <n>
+> 
+>   # if qrels file path is specified, only consider queries in the qrels file
+>   --qrels_path 
 > ```
 > 
 > To evaluate:
