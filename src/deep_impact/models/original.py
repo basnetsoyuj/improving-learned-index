@@ -15,6 +15,7 @@ from src.utils.checkpoint import ModelCheckpoint
 class DeepImpact(BertPreTrainedModel):
     max_length = 512
     tokenizer = tokenizers.Tokenizer.from_pretrained('bert-base-uncased')
+    tokenizer.enable_truncation(max_length)
     punctuation = set(string.punctuation)
 
     def __init__(self, config):
