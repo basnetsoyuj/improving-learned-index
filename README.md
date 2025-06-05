@@ -87,6 +87,9 @@ torchrun --standalone --nproc_per_node=gpu -m src.deep_impact.train \
   --seed 42 \
   --gradient_accumulation_steps 1 \
   
+  # evaluate model on NanoBEIR datasets every n steps during training
+  --eval_every 500
+  
   # experimental options
   
   # for triples and cross-entropy with in-batch negatives
@@ -134,6 +137,46 @@ python -m src.deep_impact.indexing.quantize \
 
 You can then use Anserini to generate the inverted index and export it in CIFF format, which can then be directly
 processed with PISA.
+
+### Evaluation
+
+To evaluate your DeeperImpact model on NanoBEIR datasets using the built-in inverted index-based retrieval, use the following command:
+
+```bash
+PYTHONPATH=src python src/deep_impact/evaluation/nano_beir_evaluator.py
+```
+
+The evaluator supports the following nano BEIR datasets:
+- `climatefever` - ClimateFEVER
+- `dbpedia` - DBPedia  
+- `fever` - FEVER
+- `fiqa2018` - FiQA2018
+- `hotpotqa` - HotpotQA
+- `msmarco` - MSMARCO
+- `nfcorpus` - NFCorpus
+- `nq` - Natural Questions
+- `quoraretrieval` - Quora Retrieval
+- `scidocs` - SCIDOCS
+- `arguana` - ArguAna
+- `scifact` - SciFact
+- `touche2020` - Touche2020
+
+To customize the evaluation, modify the script directly:
+
+```python
+from deep_impact.models.original import DeepImpact
+
+# Load your trained model
+model = DeepImpact.load('path/to/your/checkpoint.pt')
+
+# Initialize evaluator with desired datasets
+evaluator = NanoBEIREvaluator(dataset_names=["scifact", "nfcorpus", "fever"])
+
+# Run evaluation
+evaluator.evaluate(model)
+```
+
+The evaluator uses an efficient inverted index-based search implementation optimized for sparse retrieval, computing similarity scores through impact score aggregation for fast and accurate evaluation.
 
 ---
 
