@@ -11,6 +11,7 @@ from src.deep_impact.training import Trainer, PairwiseTrainer, CrossEncoderTrain
     InBatchNegativesTrainer
 from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLoss
 from src.utils.datasets import MSMarcoTriples, DistillationScores
+from src.deep_impact.evaluation.nano_beir_evaluator import NanoBEIREvaluator
 
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
@@ -99,6 +100,7 @@ def run(
         in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
         qrels_path: Union[str, Path] = None,
+        eval_every: int = 500
 ):
     # DeepImpact
     model_cls = DeepImpact
@@ -156,6 +158,8 @@ def run(
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
+    evaluator = NanoBEIREvaluator(batch_size=64, verbose=False)
+    
     trainer = trainer_cls(
         model=model,
         optimizer=optimizer,
@@ -166,6 +170,8 @@ def run(
         save_best=save_best,
         seed=seed,
         gradient_accumulation_steps=gradient_accumulation_steps,
+        evaluator=evaluator,
+        eval_every=eval_every,
     )
     trainer.train()
     trainer_cls.ddp_cleanup()
@@ -192,6 +198,8 @@ if __name__ == "__main__":
     parser.add_argument("--distil_kl", action="store_true", help="Use distillation loss with KL divergence loss")
     parser.add_argument("--in_batch_negatives", action="store_true", help="Use in-batch negatives")
     parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
+    parser.add_argument("--eval_every", type=int, default=500, help="Evaluate every n steps")
+    
 
     # required for distillation loss with Margin MSE
     parser.add_argument("--qrels_path", type=Path, default=None, help="Path to the qrels file")

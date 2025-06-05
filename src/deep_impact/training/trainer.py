@@ -7,9 +7,11 @@ import torch.distributed
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import json
 
 from src.utils.checkpoint import ModelCheckpoint
 from src.utils.logger import Logger
+from src.deep_impact.evaluation.nano_beir_evaluator import BaseEvaluator
 
 
 class Trainer:
@@ -26,6 +28,8 @@ class Trainer:
             save_best: bool = True,
             seed: int = 42,
             gradient_accumulation_steps: int = 1,
+            eval_every: int = 500,
+            evaluator: BaseEvaluator = None,
     ) -> None:
         self.seed = seed
         self.gpu_id = torch.distributed.get_rank()
@@ -35,7 +39,9 @@ class Trainer:
         self.train_data = train_data
         self.batch_size = batch_size
         self.gradient_accumulation_steps = gradient_accumulation_steps
-
+        self.eval_every = eval_every
+        self.evaluator = evaluator
+        
         model_name = self.model.__class__.__name__
         last_checkpoint_path = (checkpoint_dir /
                                 f'{model_name}_{ModelCheckpoint.LATEST_SNAPSHOT_SUFFIX}.{ModelCheckpoint.EXTENSION}')
@@ -61,6 +67,7 @@ class Trainer:
                 save_every=save_every,
                 save_best=save_best,
             )
+        self.checkpoint_dir = checkpoint_dir
         self.checkpoint_callback.batch_size = self.batch_size * self.n_ranks
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
         self.criterion = torch.nn.CrossEntropyLoss()
@@ -79,7 +86,7 @@ class Trainer:
         self.train_data = iter(self.train_data)
         if self.checkpoint_callback.step:
             self.skip()
-
+                
         with tqdm(total=remaining) as progress_bar:
             train_loss = 0
 
@@ -102,12 +109,21 @@ class Trainer:
                     self.optimizer.zero_grad()
 
                 if self.gpu_id == 0:
+                    if i % self.eval_every == 0 and self.evaluator is not None:
+                        self.logger.info(f"Evaluating NanoBEIR at iteration {i}")
+                        metrics = self.evaluator.evaluate_all(self.model.module)
+                        self.logger.info(f"Metrics: {metrics}")
+                        # write metrics to file as as single line, add iteration number
+                        with open(self.checkpoint_dir / "metrics.txt", "a") as f:  
+                            f.write(json.dumps({"iteration": i, "metrics": metrics}) + "\n")
+
                     progress_bar.update(1)
                     progress_bar.set_description(
                         f"Average Train Loss: {train_loss / (i + 1) * 100:.4f}, "
                         f"Current Loss: {current_loss * 100:.4f}, "
                         f"Examples Seen: {i * self.batch_size * self.n_ranks}")
                     self.checkpoint_callback()
+                            
 
             self.checkpoint_callback.save('final')
 

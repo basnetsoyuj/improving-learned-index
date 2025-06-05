@@ -187,3 +187,29 @@ class DeepImpact(BertPreTrainedModel):
             outputs = self(input_ids, attention_mask, token_type_ids)
 
         return self.compute_term_impacts([term_to_token_index], outputs)[0]
+
+    def get_impact_scores_batch(self, documents: List[str]) -> List[List[Tuple[str, float]]]:
+        """
+        Get impact scores for each term in each document in batches
+        :param documents: List of document strings
+        :return: List of lists of tuples of document terms and their impact scores
+        """
+        # Process all documents in batch
+        encoded_docs = []
+        term_to_token_maps = []
+        for doc in documents:
+            encoded, term_map = self.process_document(doc)
+            encoded_docs.append(encoded)
+            term_to_token_maps.append(term_map)
+
+        # Create batched tensors
+        input_ids = torch.tensor([enc.ids for enc in encoded_docs], dtype=torch.long).to(self.device)
+        attention_mask = torch.tensor([enc.attention_mask for enc in encoded_docs], dtype=torch.long).to(self.device)
+        token_type_ids = torch.tensor([enc.type_ids for enc in encoded_docs], dtype=torch.long).to(self.device)
+
+        # Get model outputs for full batch
+        with torch.no_grad():
+            outputs = self(input_ids, attention_mask, token_type_ids)
+
+        # Compute impact scores for all documents
+        return self.compute_term_impacts(term_to_token_maps, outputs)
