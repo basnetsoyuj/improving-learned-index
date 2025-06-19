@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import Union
+import wandb
 
 import torch
 import torch.distributed
@@ -30,6 +31,7 @@ class Trainer:
             gradient_accumulation_steps: int = 1,
             eval_every: int = 500,
             evaluator: BaseEvaluator = None,
+            use_wandb: bool = False,
     ) -> None:
         self.seed = seed
         self.gpu_id = torch.distributed.get_rank()
@@ -41,6 +43,7 @@ class Trainer:
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.eval_every = eval_every
         self.evaluator = evaluator
+        self.use_wandb = use_wandb
         
         model_name = self.model.__class__.__name__
         last_checkpoint_path = (checkpoint_dir /
@@ -70,6 +73,8 @@ class Trainer:
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_callback.batch_size = self.batch_size * self.n_ranks
         self.model = DDP(self.model, device_ids=[self.gpu_id], find_unused_parameters=True)
+        if self.use_wandb:
+            wandb.watch(self.model, log="all")
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def train(self):
@@ -92,7 +97,7 @@ class Trainer:
 
             for i, batch in enumerate(self.train_data):
                 with torch.cuda.amp.autocast():
-                    outputs = self.get_output_scores(batch)
+                    outputs = self.get_output_scores(batch, i)
                     loss = self.evaluate_loss(outputs, batch)
 
                     loss /= self.gradient_accumulation_steps
@@ -100,6 +105,10 @@ class Trainer:
                 scaler.scale(loss).backward()
                 current_loss = loss.detach().cpu().item()
                 train_loss += current_loss
+                
+                if self.use_wandb:
+                    wandb.log({"train_loss": current_loss}, step=i) 
+                    wandb.log({"avg_score": outputs.mean().item(), "min_score": outputs.min().item(), "max_score": outputs.max().item()}, step=i)
 
                 if i % self.gradient_accumulation_steps == 0:
                     scaler.unscale_(self.optimizer)
@@ -109,10 +118,13 @@ class Trainer:
                     self.optimizer.zero_grad()
 
                 if self.gpu_id == 0:
-                    if i % self.eval_every == 0 and self.evaluator is not None:
+                    if i % self.eval_every == 0 and i > 0 and self.evaluator is not None:
                         self.logger.info(f"Evaluating NanoBEIR at iteration {i}")
                         metrics = self.evaluator.evaluate_all(self.model.module)
                         self.logger.info(f"Metrics: {metrics}")
+                        if self.use_wandb:
+                            for dataset, dataset_metrics in metrics.items():
+                                wandb.log({f"{dataset}_ndcg@10": dataset_metrics[0]["NDCG@10"]}, step=i)
                         # write metrics to file as as single line, add iteration number
                         with open(self.checkpoint_dir / "metrics.txt", "a") as f:  
                             f.write(json.dumps({"iteration": i, "metrics": metrics}) + "\n")
@@ -134,11 +146,13 @@ class Trainer:
         type_ids = torch.tensor([x.type_ids for x in encoded_list], dtype=torch.long).to(self.gpu_id)
         return input_ids, attention_mask, type_ids
 
-    def get_output_scores(self, batch):
+    def get_output_scores(self, batch, step):
         input_ids, attention_mask, type_ids = self.get_input_tensors(batch['encoded_list'])
         document_term_scores = self.model(input_ids, attention_mask, type_ids)
 
         masks = batch['masks'].to(self.gpu_id)
+        if self.use_wandb:
+            wandb.log({"avg_matches": (masks != 0).float().mean().item()}, step=step)
         return (masks * document_term_scores).sum(dim=1).squeeze(-1).view(self.batch_size, -1)
 
     def evaluate_loss(self, outputs, batch):
