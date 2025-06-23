@@ -8,19 +8,15 @@ import tokenizers
 import torch
 import torch.nn as nn
 from transformers import BertPreTrainedModel, BertModel
-from nltk.stem import PorterStemmer
 
 from src.utils.checkpoint import ModelCheckpoint
 
 
 class DeepImpact(BertPreTrainedModel):
     max_length = 512
-    tokenizer = tokenizers.Tokenizer.from_pretrained('mixedbread-ai/mxbai-embed-large-v1')
+    tokenizer = tokenizers.Tokenizer.from_pretrained('bert-base-uncased')
     tokenizer.enable_truncation(max_length)
     punctuation = set(string.punctuation)
-    stemmer = PorterStemmer()
-
-    stemmer_cache = {}
 
     def __init__(self, config):
         super(DeepImpact, self).__init__(config)
@@ -101,20 +97,15 @@ class DeepImpact(BertPreTrainedModel):
         mask = np.zeros(max_length, dtype=bool)
         token_indices_of_matching_terms = [v for k, v in term_to_token_index.items() if k in query_terms]
         mask[token_indices_of_matching_terms] = True
+
         return torch.from_numpy(mask)
 
     @classmethod
     def process_query(cls, query: str) -> Set[str]:
         query = cls.tokenizer.normalizer.normalize_str(query)
-        terms = map(lambda x: x[0], cls.tokenizer.pre_tokenizer.pre_tokenize_str(query))
-        filtered_terms = filter(lambda x: x not in cls.punctuation, terms)
-        stemmed_terms = set()
-        for term in filtered_terms:
-            if term not in cls.stemmer_cache:
-                cls.stemmer_cache[term] = cls.stemmer.stem(term)
-            stemmed_terms.add(cls.stemmer_cache[term])
-        return stemmed_terms
-    
+        return set(filter(lambda x: x not in cls.punctuation,
+                          map(lambda x: x[0], cls.tokenizer.pre_tokenizer.pre_tokenize_str(query))))
+
     @classmethod
     def process_document(cls, document: str) -> Tuple[tokenizers.Encoding, Dict[str, int]]:
         """
@@ -125,7 +116,7 @@ class DeepImpact(BertPreTrainedModel):
 
         document = cls.tokenizer.normalizer.normalize_str(document)
         document_terms = [x[0] for x in cls.tokenizer.pre_tokenizer.pre_tokenize_str(document)]
-        
+
         encoded = cls.tokenizer.encode(document_terms, is_pretokenized=True)
 
         term_index_to_token_index = {}
@@ -144,16 +135,12 @@ class DeepImpact(BertPreTrainedModel):
             if term not in filtered_term_to_token_index \
                     and term not in cls.punctuation \
                     and i in term_index_to_token_index:
-                # check if stemm is cached 
-                if term not in cls.stemmer_cache:
-                    cls.stemmer_cache[term] = cls.stemmer.stem(term)
-                term = cls.stemmer_cache[term]
                 filtered_term_to_token_index[term] = term_index_to_token_index[i]
         return encoded, filtered_term_to_token_index
 
     @classmethod
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
-        model = cls.from_pretrained('mixedbread-ai/mxbai-embed-large-v1')
+        model = cls.from_pretrained('Luyu/co-condenser-marco')
         if checkpoint_path is not None:
             if os.path.exists(checkpoint_path):
                 ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)

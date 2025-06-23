@@ -13,7 +13,6 @@ from src.deep_impact.training.distil_trainer import DistilMarginMSE, DistilKLLos
 from src.utils.datasets import MSMarcoTriples, DistillationScores
 from src.deep_impact.evaluation.nano_beir_evaluator import NanoBEIREvaluator
 
-import wandb
 
 def collate_fn(batch, model_cls=DeepImpact, max_length=None):
     encoded_list, masks = [], []
@@ -101,12 +100,8 @@ def run(
         in_batch_negatives: bool = False,
         start_with: Union[str, Path] = None,
         qrels_path: Union[str, Path] = None,
-        eval_every: int = 500,
-        use_wandb: bool = False,
+        eval_every: int = 500
 ):
-    if use_wandb:
-        wandb.init(project="deep-impact")
-
     # DeepImpact
     model_cls = DeepImpact
     trainer_cls = Trainer
@@ -177,7 +172,6 @@ def run(
         gradient_accumulation_steps=gradient_accumulation_steps,
         evaluator=evaluator,
         eval_every=eval_every,
-        use_wandb=use_wandb,
     )
     trainer.train()
     trainer_cls.ddp_cleanup()
@@ -205,7 +199,7 @@ if __name__ == "__main__":
     parser.add_argument("--in_batch_negatives", action="store_true", help="Use in-batch negatives")
     parser.add_argument("--start_with", type=Path, default=None, help="Start training with this checkpoint")
     parser.add_argument("--eval_every", type=int, default=500, help="Evaluate every n steps")
-    parser.add_argument("--use_wandb", action="store_true", help="Use wandb")
+    
 
     # required for distillation loss with Margin MSE
     parser.add_argument("--qrels_path", type=Path, default=None, help="Path to the qrels file")
