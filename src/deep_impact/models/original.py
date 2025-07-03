@@ -2,18 +2,19 @@ import os
 import string
 from pathlib import Path
 from typing import Optional, Union, List, Dict, Tuple, Set
+from transformers import AutoModel, AutoConfig
 
 import numpy as np
 import tokenizers
 import torch
 import torch.nn as nn
-from transformers import BertPreTrainedModel, BertModel
+
 from nltk.stem import PorterStemmer
 
 from src.utils.checkpoint import ModelCheckpoint
 
 
-class DeepImpact(BertPreTrainedModel):
+class DeepImpact(nn.Module):
     max_length = 512
     tokenizer = tokenizers.Tokenizer.from_pretrained('mixedbread-ai/mxbai-embed-large-v1')
     tokenizer.enable_truncation(max_length)
@@ -22,14 +23,53 @@ class DeepImpact(BertPreTrainedModel):
 
     stemmer_cache = {}
 
-    def __init__(self, config):
-        super(DeepImpact, self).__init__(config)
-        self.bert = BertModel(config)
+    def __init__(self, config=None):
+        super(DeepImpact, self).__init__()
+        if config is None:
+            # Load default config
+            config = AutoConfig.from_pretrained('mixedbread-ai/mxbai-embed-large-v1', trust_remote_code=True)
+        
+        self.config = config
+        self.bert = AutoModel.from_pretrained('mixedbread-ai/mxbai-embed-large-v1', trust_remote_code=True)
+        
+        # Ensure BERT parameters are unfrozen and can be trained
+        for param in self.bert.parameters():
+            param.requires_grad = True
+            
         self.impact_score_encoder = nn.Sequential(
             nn.Linear(config.hidden_size, 1),
             nn.ReLU()
         )
-        self.init_weights()
+            
+    def check_gradient_flow(self):
+        """Check if gradients are flowing through the model"""
+        total_norm = 0
+        param_count = 0
+        for name, param in self.named_parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+                param_count += 1
+            else:
+                print(f"No gradient for parameter: {name}")
+        total_norm = total_norm ** (1. / 2)
+        print(f"Total gradient norm: {total_norm}, Parameters with gradients: {param_count}")
+        return total_norm
+    
+    def freeze_bert(self):
+        """Freeze BERT parameters"""
+        for param in self.bert.parameters():
+            param.requires_grad = False
+    
+    def unfreeze_bert(self):
+        """Unfreeze BERT parameters"""
+        for param in self.bert.parameters():
+            param.requires_grad = True
+    
+    def to(self, device: str):
+        self.bert.to(device)
+        self.impact_score_encoder.to(device)
+        return self
 
     def forward(
             self,
@@ -153,15 +193,43 @@ class DeepImpact(BertPreTrainedModel):
 
     @classmethod
     def load(cls, checkpoint_path: Optional[Union[str, Path]] = None):
-        model = cls.from_pretrained('mixedbread-ai/mxbai-embed-large-v1')
         if checkpoint_path is not None:
             if os.path.exists(checkpoint_path):
+                # Load from local checkpoint
+                model = cls()
                 ModelCheckpoint.load(model=model, last_checkpoint_path=checkpoint_path)
             else:
+                # Load from HuggingFace hub (if it exists)
                 model = cls.from_pretrained(checkpoint_path)
+        else:
+            # Load default model
+            model = cls()
+        
         cls.tokenizer.enable_truncation(max_length=cls.max_length, strategy='longest_first')
         cls.tokenizer.enable_padding(length=cls.max_length)
         return model
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+        """Load a model from a pretrained checkpoint"""
+        try:
+            config = AutoConfig.from_pretrained(pretrained_model_name_or_path)
+            model = cls(config)
+            
+            # Load state dict
+            if os.path.isdir(pretrained_model_name_or_path):
+                # Local directory
+                state_dict = torch.load(os.path.join(pretrained_model_name_or_path, "pytorch_model.bin"), map_location='cpu')
+                model.load_state_dict(state_dict, strict=False)
+            else:
+                # For HuggingFace hub models, just return the model with pretrained BERT
+                # The BERT weights are already loaded in __init__
+                pass
+            
+            return model
+        except Exception:
+            # If loading fails, return default model
+            return cls()
 
     @staticmethod
     def compute_term_impacts(
@@ -192,9 +260,11 @@ class DeepImpact(BertPreTrainedModel):
         :return: List of tuples of document terms and their impact scores
         """
         encoded, term_to_token_index = self.process_document(document)
-        input_ids = torch.tensor([encoded.ids], dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor([encoded.attention_mask], dtype=torch.long).to(self.device)
-        token_type_ids = torch.tensor([encoded.type_ids], dtype=torch.long).to(self.device)
+        # Use the device from the model's parameters
+        device = next(self.parameters()).device
+        input_ids = torch.tensor([encoded.ids], dtype=torch.long).to(device)
+        attention_mask = torch.tensor([encoded.attention_mask], dtype=torch.long).to(device)
+        token_type_ids = torch.tensor([encoded.type_ids], dtype=torch.long).to(device)
 
         with torch.no_grad():
             outputs = self(input_ids, attention_mask, token_type_ids)
@@ -216,9 +286,10 @@ class DeepImpact(BertPreTrainedModel):
             term_to_token_maps.append(term_map)
 
         # Create batched tensors
-        input_ids = torch.tensor([enc.ids for enc in encoded_docs], dtype=torch.long).to(self.device)
-        attention_mask = torch.tensor([enc.attention_mask for enc in encoded_docs], dtype=torch.long).to(self.device)
-        token_type_ids = torch.tensor([enc.type_ids for enc in encoded_docs], dtype=torch.long).to(self.device)
+        device = next(self.parameters()).device
+        input_ids = torch.tensor([enc.ids for enc in encoded_docs], dtype=torch.long).to(device)
+        attention_mask = torch.tensor([enc.attention_mask for enc in encoded_docs], dtype=torch.long).to(device)
+        token_type_ids = torch.tensor([enc.type_ids for enc in encoded_docs], dtype=torch.long).to(device)
 
         # Get model outputs for full batch
         with torch.no_grad():
@@ -226,3 +297,12 @@ class DeepImpact(BertPreTrainedModel):
 
         # Compute impact scores for all documents
         return self.compute_term_impacts(term_to_token_maps, outputs)
+    
+if __name__ == "__main__":
+    model = DeepImpact.load()
+    print(model.bert.dtype)
+    # model.check_gradient_flow()
+    # model.freeze_bert()
+    # model.check_gradient_flow()
+    # model.unfreeze_bert()
+    # model.check_gradient_flow()

@@ -99,7 +99,6 @@ class Trainer:
                 with torch.cuda.amp.autocast():
                     outputs = self.get_output_scores(batch, i)
                     loss = self.evaluate_loss(outputs, batch)
-
                     loss /= self.gradient_accumulation_steps
 
                 scaler.scale(loss).backward()
@@ -107,9 +106,11 @@ class Trainer:
                 train_loss += current_loss
                 
                 if self.use_wandb:
+                    wandb.log({"avg_training_loss": train_loss / (i + 1)}, step=i)
                     wandb.log({"train_loss": current_loss}, step=i) 
                     wandb.log({"avg_score": outputs.mean().item(), "min_score": outputs.min().item(), "max_score": outputs.max().item()}, step=i)
-
+                    wandb.log({"learning_rate": self.optimizer.param_groups[0]['lr']}, step=i)
+                    
                 if i % self.gradient_accumulation_steps == 0:
                     scaler.unscale_(self.optimizer)
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 2.0)
